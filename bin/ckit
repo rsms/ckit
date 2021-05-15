@@ -1,0 +1,78 @@
+#!/bin/sh
+set -e
+pushd "$(dirname "$(realpath "$0")")/.." >/dev/null
+export CKIT_DIR=$PWD
+popd >/dev/null
+source "$CKIT_DIR"/misc/lib.sh
+
+BUILD_TOOL=ninja
+
+_help_common_options() {
+  cat <<- _EOF_
+  -v          Verbose mode; show more details.
+  -C <dir>    Change directory to <dir> before continuing.
+  -h, -help   Show help and exit.
+_EOF_
+}
+
+_help() {
+  cat <<- _EOF_ >&2
+$PROG builds & tests packages
+Usage: $PROG [options] build     [options] [<target> ...]
+       $PROG [options] build-pkg [options] [<pkg> ...]
+       $PROG [options] test      [options] [<pkg> ...]
+       $PROG [options] watch     [options]
+       $PROG [options] init      [<dir> [<srcdir>]]
+       $PROG [options] help
+common options:
+$(_help_common_options)
+If no command is given, the "build" command is assumed.
+For details of a command, see: $PROG <command> -h
+_EOF_
+}
+
+# returns the number of options consumed. 0 means no match.
+_try_parse_common_option() {
+  case "$1" in
+    -h|-*help) _help; exit 0 ;;
+    -v)        VERBOSE=true; return 1 ;;
+    -C)        _expectarg $1 "$2"; cd "$2"; return 2 ;;
+  esac
+  return 0
+}
+
+_parse_common_option() {
+  _try_parse_common_option "$@"
+  local N=$?
+  if [ $N -eq 0 ]; then
+    _errhelp "Unknown option $1"
+  fi
+  return $N
+}
+
+
+FWD_ARGS=()
+while [[ $# -gt 0 ]]; do case "$1" in
+  help) _help; exit 0 ;;
+  --)   shift; break ;;
+  -*)   set +e ; _try_parse_common_option "$@" ; N=$? ; set -e
+        if [ $N -eq 0 ]; then
+          FWD_ARGS+=("$1") # pass on options to the command to be invoked
+          shift
+        else # consume args
+          for i in `seq $N`; do shift; done
+        fi ;;
+  *)    COMMAND=$1; shift; break ;;
+esac; done
+
+# add FWD_ARGS back to $@
+set -- "${FWD_ARGS[@]}" "$@"
+
+[ -n "$COMMAND" ] || COMMAND=build
+case "$COMMAND" in
+  init)                 source "$CKIT_DIR"/misc/cmd-init.sh ;;
+  build|build-pkg|test) source "$CKIT_DIR"/misc/cmd-build.sh ;;
+  watch)                source "$CKIT_DIR"/misc/cmd-watch.sh ;;
+  *)                    _err "unknown command $COMMAND (see $PROG -help)" ;;
+esac
+exit $EXIT_CODE

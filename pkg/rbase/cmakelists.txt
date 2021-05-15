@@ -1,0 +1,50 @@
+cmake_minimum_required(VERSION 3.12)
+project(rbase  VERSION 0.1.0  LANGUAGES C)
+
+include(../../ckit.cmake)
+ckit_configure_project(C)
+
+add_library(rbase
+  chan.c
+  debug.c
+  fs.c
+  hash.c
+  mem.c
+  mem_dlmalloc.c
+  mpscq.c
+  panic.c
+  parseint.c
+  path.c
+  pool.c
+  str.c
+  sys_ncpu.c
+  testing.c
+  thread.c
+  time.c
+  unicode.c
+  util.c
+  util_io.c
+  util_sha1.c)
+
+ckit_define_test(rbase)
+
+target_precompile_headers(rbase
+  PUBLIC
+    rbase.h
+  # PRIVATE
+  #   [["other_header.h"]]
+  #   <unordered_map>
+)
+
+# file(GLOB rbase_headers "*.h")
+# list(FILTER rbase_headers EXCLUDE REGEX "^mem_")
+# list(FILTER rbase_headers EXCLUDE REGEX "^thread_")
+# message("rbase_headers ${rbase_headers}")
+# target_include_directories(rbase PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# target_link_libraries(rbase PUBLIC rbase_headers)
+
+# file(GLOB RBASE_SOURCES "*.c")
+# file(GLOB_RECURSE RBASE_SOURCES "*.c")
+# list(FILTER RBASE_SOURCES EXCLUDE REGEX "_test\\.c$")
+# message("RBASE_SOURCES: ${RBASE_SOURCES}")
+# add_library(rbase ${RBASE_SOURCES})

@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.12)
+project(hello  VERSION 0.1.0  LANGUAGES C)
+
+include($ENV{CKIT_DIR}/ckit.cmake)
+ckit_configure_project(C)
+ckit_require_package(rbase)
+
+add_executable(${PROJECT_NAME} hello.c person_test.c)
+target_link_libraries(${PROJECT_NAME} rbase)
+ckit_define_test(${PROJECT_NAME} hello.c)
