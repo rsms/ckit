@@ -55,6 +55,16 @@ echo "int main() { return 0; }" > hello.c
 ./ckit/bin/ckit test   # builds & runs out/debug-test/myproject-test
 ```
 
+Dependencies:
+- modern C shell like zsh, bash, ash or hush
+- modern C compiler like clang 10 or GCC 10 (one that supports C11)
+- [ninja](https://ninja-build.org)
+- [cmake](https://cmake.org) >=3.12
+
+Additionally, the `ckit watch` command requires:
+- [ninja](https://ninja-build.org) version >=1.9 (for `ninja -t deps`)
+- [fswatch](https://github.com/emcrisostomo/fswatch)
+  OR [inotify-tools](https://github.com/inotify-tools/inotify-tools)
 
 Note that you don't have to use `bin/ckit`.
 ckit packages are plain CMake projects and thus you can just use CMake if you want.
