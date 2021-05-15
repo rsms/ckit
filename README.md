@@ -68,3 +68,10 @@ Additionally, the `ckit watch` command requires:
 
 Note that you don't have to use `bin/ckit`.
 ckit packages are plain CMake projects and thus you can just use CMake if you want.
+
+
+## Notes
+
+Some CMake reading:
+- [Modern CMake](https://cliutils.gitlab.io/modern-cmake/)
+- [Effective Modern CMake](https://gist.github.com/mbinna/c61dbb39bca0e4fb7d1f73b0d66a4fd1)
