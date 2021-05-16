@@ -42,11 +42,11 @@ RUN_ARGS=()
 BUILD_ARGS=()
 BUILD_TARGET=
 BUILD_DIR=
+BUILD_CMD=build
 OPT_RELEASE=false
 OPT_TEST=
 OPT_RUN=false
 OPT_RUN_SHELL=false
-CKIT_EXE_CMD=build
 
 while [[ $# -gt 0 ]]; do case "$1" in
   -r|-run|--run) OPT_RUN=true; shift ;;
@@ -62,9 +62,8 @@ while [[ $# -gt 0 ]]; do case "$1" in
   --) shift; break ;;
   -*)
     set +e ; _try_parse_common_option "$@" ; N=$? ; set -e
-    if [ $N -eq 0 ]; then
-      BUILD_ARGS+=("$1") ; shift
-    else
+    BUILD_ARGS+=("$1") ; shift
+    if [ $N -gt 0 ]; then
       for i in `seq $N`; do shift; done # consume args
     fi
     ;;
@@ -80,8 +79,10 @@ while [[ $# -gt 0 ]]; do case "$1" in
       BUILD_ARGS+=( "$@" )
       break
     fi
-    BUILD_ARGS+=( "$1" )
     BUILD_TARGET=$1
+    if [ "$BUILD_TARGET" != "test" ]; then
+      BUILD_ARGS+=( "$1" )
+    fi
     shift
     ;;
 esac; done
@@ -109,8 +110,7 @@ if [ -n "$OPT_TEST" ]; then
   BUILD_ARGS+=(-T)
 elif [ "$BUILD_TARGET" == "test" ]; then
   OPT_TEST=y
-  BUILD_ARGS=("${BUILD_ARGS[@]:1}")  # remove BUILD_TARGET from BUILD_ARGS
-  CKIT_EXE_CMD=test  # run "ckit test" instead of "ckit build"
+  BUILD_CMD=test  # run "ckit test" instead of "ckit build"
 fi
 if $OPT_RELEASE; then
   BUILD_DIR=$BUILD_DIR/$(_build_dir_suffix release $OPT_TEST)
@@ -153,10 +153,11 @@ fi
 
 if $VERBOSE; then
   echo "-----------------------------------------------------------"
-  echo "CKIT_DIR       $CKIT_DIR"
-  echo "CKIT_EXE       $CKIT_EXE"
-  echo "CKIT_EXE_CMD   $CKIT_EXE_CMD"
+  echo "CKIT_DIR        $CKIT_DIR"
+  echo "CKIT_EXE        $CKIT_EXE"
   echo "SRC_DIR         $SRC_DIR"
+  echo "BUILD_CMD       $BUILD_CMD"
+  echo "BUILD_ARGS      [${BUILD_ARGS[@]}"]
   echo "BUILD_DIR       $BUILD_DIR"
   echo "BUILD_TARGET    $BUILD_TARGET"
   echo "TEST_ENABLED    $([ -n "$OPT_TEST" ] && echo yes || echo no)"
@@ -351,7 +352,7 @@ while true; do
   $FIRST_RUN && $VERBOSE || printf "\x1bc"
 
   # build
-  if "$CKIT_EXE" $CKIT_EXE_CMD "${BUILD_ARGS[@]}"; then
+  if "$CKIT_EXE" $BUILD_CMD "${BUILD_ARGS[@]}"; then
     [ ${#RUN_ARGS[@]} -eq 0 ] || _run_after_build
   elif $FIRST_RUN; then
     # build failed immediately
