@@ -6,6 +6,33 @@
 #include <mach/mach_time.h>
 #endif
 
+
+UnixTime unixtime() {
+  #ifdef CLOCK_REALTIME
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return ts.tv_sec + (ts.tv_nsec * 1e-9);
+  #else
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    return tv.tv_sec + (tv.tv_usec * 1e-6);
+  #endif
+}
+
+
+u64 unixtime_sec() {
+  #ifdef CLOCK_REALTIME
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (u64)ts.tv_sec;
+  #else
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    return (u64)tv.tv_sec;
+  #endif
+}
+
+
 // msleep sleeps for some number of milliseconds
 // It may sleep for less time if a signal was delivered.
 // Returns 0 when sleept for the requested time, -1 when interrupted.

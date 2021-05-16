@@ -1,6 +1,15 @@
 #pragma once
 ASSUME_NONNULL_BEGIN
 
+typedef double UnixTime;
+
+// unixtime returns the current real time as a UNIX timestamp in high precision.
+// Number of seconds since Jan 1 1970 UTC.
+UnixTime unixtime();
+
+// unixtime_sec returns the current real time as a UNIX timestamp with second precision.
+u64 unixtime_sec();
+
 // nanotime returns nanoseconds measured from an undefined point in time.
 // It uses the most high-resolution, low-latency clock available on the system.
 u64 nanotime();
