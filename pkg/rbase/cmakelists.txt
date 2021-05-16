@@ -5,17 +5,14 @@ include(../../ckit.cmake)
 ckit_configure_project(C)
 
 add_library(rbase
-  chan.c
   debug.c
   fs.c
   hash.c
   mem.c
   mem_dlmalloc.c
-  mpscq.c
   panic.c
   parseint.c
   path.c
-  pool.c
   str.c
   sys_ncpu.c
   testing.c
@@ -24,7 +21,12 @@ add_library(rbase
   unicode.c
   util.c
   util_io.c
-  util_sha1.c)
+  util_sha1.c
+
+  # extras
+  mpscq/mpscq.c
+  pool/pool.c
+)
 
 ckit_define_test(rbase)
 

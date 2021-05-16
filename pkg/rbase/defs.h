@@ -18,7 +18,7 @@
   #include <stdatomic.h>
 #endif
 
-#include "target.h"
+#include "defs_target.h"
 
 typedef signed char            i8;
 typedef unsigned char          u8;

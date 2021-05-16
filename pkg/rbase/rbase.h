@@ -23,6 +23,10 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 extern "C" {
 #endif
 
+// Interfaces in the top-level rbase directory are included here.
+// Interfaces of subdirectories need to be explicitly included by
+// users of rbase. This header (rbase.h) is usually precompiled.
+
 #include "panic.h"
 #include "debug.h"
 #include "mem.h"
@@ -36,9 +40,6 @@ extern "C" {
 #include "thread.h"
 #include "path.h"
 #include "fs.h"
-// #include "mpscq.h"
-// #include "chan.h"
-// #include "pool.h"
 
 #ifdef __cplusplus
 }

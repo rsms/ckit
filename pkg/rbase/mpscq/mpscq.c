@@ -1,5 +1,5 @@
 // 2015 Daniel Bittman <danielbittman1@gmail.com>: http://dbittman.github.io/
-#include "rbase.h"
+#include <rbase/rbase.h>
 #include "mpscq.h"
 
 #define MPSCQ_MALLOC 1 // flag

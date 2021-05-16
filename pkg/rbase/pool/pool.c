@@ -1,4 +1,4 @@
-#include "rbase.h"
+#include <rbase/rbase.h>
 #include "pool.h"
 
 // Adapted from:
@@ -44,8 +44,6 @@ PoolEntry* PoolHead(const Pool* fl) {
 
 // -----------------------------------------------------------------------------------------------
 #if R_TESTING_ENABLED
-
-#include "thread.h"
 
 typedef struct TestEntry {
   POOL_ENTRY_HEAD
