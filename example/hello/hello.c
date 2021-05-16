@@ -1,7 +1,7 @@
 #include <rbase/rbase.h>
 #include "person.h"
 
-int main(int argc, const char* argv[argc+1]) {
+int main(int argc, const char** argv) {
   dlog("argv[0] = %s", argv[0]);
 
   if (argc > 1 && strcmp(argv[1], "-h") == 0) {
