@@ -85,8 +85,8 @@ Str str_makeroom(Str s, u32 addlen) {
 char* str_reserve(Str* sp, u32 len) {
   Str s2 = str_makeroom(*sp, len);
   *sp = s2;
-  char* p = s2;
   auto h = STR_HEADER(s2);
+  char* p = s2 + h->len;
   h->len += len;
   h->p[h->len] = 0;
   return p;
