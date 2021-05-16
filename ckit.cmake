@@ -189,6 +189,7 @@ function(_ckit_configure_project)
   get_filename_component(SRC_FILENAME_PREFIX ${CMAKE_SOURCE_DIR} NAME)
   add_compile_options(
     -Wall -Wextra
+    -Wvla
     -Wimplicit-fallthrough
     -Wno-missing-field-initializers
     -Wno-unused-parameter
