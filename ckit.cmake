@@ -224,19 +224,23 @@ function(_ckit_configure_project)
     set_property(GLOBAL PROPERTY LINK_WHAT_YOU_USE on)
     add_compile_definitions(DEBUG=1)
     add_compile_options(-O0)
-  else()
+  elseif (${CMAKE_BUILD_TYPE} MATCHES "Release")
     add_compile_definitions(NDEBUG=1)  # disable assertions
     add_compile_options(-O3)
     add_link_options(-dead_strip)
+    if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+      add_link_options(-flto)
+    else()
+      # enable LTO/IPO if available
+      include(CheckIPOSupported)
+      check_ipo_supported(RESULT IPO_SUPPORTED)
+      if(IPO_SUPPORTED)
+        set_property(GLOBAL PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+      endif()
+    endif()
   endif()
 
-  # enable LTO aka IPO if available
-  include(CheckIPOSupported)
-  check_ipo_supported(RESULT IPO_SUPPORTED)
-  if(IPO_SUPPORTED)
-    # set_target_properties(rbase PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
-    set_property(GLOBAL PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-  endif()
+
 
 endfunction() # _ckit_configure_project
 
