@@ -104,7 +104,7 @@ static void testrun_end(Testing* t, u64 startat) {
 }
 
 
-int testing_main(int argc, const char* argv[argc+1]) {
+int testing_main(int argc, const char** argv) {
   // usage: $0 [filter_prefix]
   // note: if env R_TEST_FILTER is set, it is used as the default value for argv[1]
 
