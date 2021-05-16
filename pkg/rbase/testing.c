@@ -5,7 +5,7 @@
 // -----------------------------------------------------------------------------------
 #if defined(R_TESTING_MAIN_IMPL)
 
-int main(int argc, const char* argv[argc+1]) {
+int main(int argc, const char** argv) {
   return testing_main(argc, argv);
 }
 
