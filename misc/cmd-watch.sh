@@ -103,7 +103,7 @@ if [ -z "$BUILD_DIR" ]; then
   # TODO: port this improved "CKIT_PKG_DIR" case to cmd-build.sh
   case "$SRC_DIR" in
     "$CKIT_PKG_DIR/"*) BUILD_DIR=$CKIT_DIR/out${SRC_DIR:${#CKIT_PKG_DIR}} ;;
-    *)                  BUILD_DIR=$PWD/out ;;
+    *)                 BUILD_DIR=$PWD/out ;;
   esac
 fi
 if [ -n "$OPT_TEST" ]; then
@@ -331,20 +331,16 @@ _scan_source_files() {
       srclist_file=$(_tmpfile)
       find "${BUILD_DIR}" \
         -maxdepth 2 -type f -name '*.ckit-sources.txt' -exec cat '{}' ';' > "$srclist_file"
+    else
+      return 1
     fi
   fi
-  if [ -f "$srclist_file" ]; then
-    while IFS= read -r f; do
-      SOURCES+=("$f")
-    done < "$srclist_file"
-  fi
-  if [ ${#SOURCES[@]} -eq 0 ]; then
-    _err "No source files found"
-  fi
+  echo "$srclist_file"
 }
 
 ATEXIT+=( "_pidfile_kill '$WATCH_INDICATOR_PIDFILE'" )
 FIRST_RUN=true
+WATCH_FILES_FILE=$(_tmpfile)
 
 while true; do
   # clear screen ("scroll to top" style)
@@ -354,15 +350,17 @@ while true; do
   # build
   if "$CKIT_EXE" $BUILD_CMD "${BUILD_ARGS[@]}"; then
     [ ${#RUN_ARGS[@]} -eq 0 ] || _run_after_build
-  elif $FIRST_RUN; then
-    # build failed immediately
-    exit 1
+  # elif $FIRST_RUN; then
+  #   # build failed immediately
+  #   exit 1
   fi
   FIRST_RUN=false
 
   # scan for source files (populates SOURCES)
   SOURCES=()
-  _scan_source_files
+  SOURCE_LIST_FILE=$(_scan_source_files)
+  [ -f "$SOURCE_LIST_FILE" ] || _err "No source files found"
+  cp -f "$SOURCE_LIST_FILE" "$WATCH_FILES_FILE"
 
   # scan for source deps
   #
@@ -381,50 +379,14 @@ while true; do
   #
   mkdir -p "$BUILD_DIR"
   _pushd "$BUILD_DIR"
-  "$BUILD_TOOL" "$BUILD_TARGET" -t deps |
-    grep -E "^[^ ]|    ${SRC_DIR//\./\\.}/|    \.\./\.\./" > "$DEPS_FILE"
+  "$BUILD_TOOL" "$BUILD_TARGET" -t deps \
+    | grep -E "^    ${SRC_DIR//\./\\.}/|    \." \
+    | sed -e 's/^    //' \
+    | grep -v "^$BUILD_DIR" \
+    >> "$WATCH_FILES_FILE"
   _popd
 
-  # refresh WATCH_FILES
-  STATE=1
-  WATCH_FILES=() # reset list
-  DEP_INDENT="    "  # hard-coded indentation of ninja "deps" tool output
-  while IFS= read -r file; do
-    case "$file" in
-      "$DEP_INDENT"*)
-        file=${file:${#DEP_INDENT}}
-        case "$file" in
-          "${SRC_DIR}/"*|../../*)
-            case "$file" in
-              /*) ;;
-              *)  file=$(realpath "$BUILD_DIR/$file") ;;
-            esac
-            # echo "${STATE}>> $file"
-            if [ $STATE -eq 1 ]; then
-              if _is_source_file "$file"; then
-                STATE=2
-                # yes, a source file! let's collect its dependencies in WATCH_FILES
-              # else
-              #   echo "  _is_source_file => false"
-              #   # nope, not a source file
-              fi
-            elif [ $STATE -eq 2 ]; then
-              WATCH_FILES+=("$file")
-            fi
-            ;;
-          # ignore deps outside SRC_DIR, like system library headers
-        esac
-        ;;
-      "") ;;  # ignore empty lines
-      *)
-        # begin target definition
-        # format:
-        # CMakeFiles/hamt.dir/hamt.c.o: #deps 178, deps mtime 1621036073929710506 (VALID)
-        STATE=1
-        ;;
-    esac
-  done < "$DEPS_FILE"
-  WATCH_FILES+=( "${SOURCES[@]}" )
+  WATCH_FILES=( $(sort -u "$WATCH_FILES_FILE") )
   WATCH_FILES+=( "$SRC_DIR/cmakelists.txt" )
 
   if $VERBOSE; then
