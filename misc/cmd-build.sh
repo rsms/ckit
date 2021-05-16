@@ -172,13 +172,12 @@ while [[ $# -gt 0 ]]; do case "$1" in
   --)          shift; REST_ARGS+=( "$@" ); break ;;
   -*)
     set +e ; _try_parse_common_option "$@" ; N=$? ; set -e
-    if [ "$COMMAND" == "build" ]; then
-      # unknown options are forwarded to the build tool
-      if [ $N -eq 0 ]; then
+    if [ $N -eq 0 ]; then
+      if [ "$COMMAND" == "build" ]; then
+        # unknown options are forwarded to the build tool
         REST_ARGS+=("$@")
         break
       fi
-    else
       _errhelp "Unknown option $1"
     fi
     # else, consume args
