@@ -116,14 +116,19 @@ _logv() {
   fi
 }
 
-# _build_dir_suffix <build-type> <enable-tests>
+# _build_dir_suffix <build-type> [<enable-tests>]
 _build_dir_suffix() {
-  local suffix=
-  case "$1" in
-    *elease)  suffix=release ;;
-    *ebug|"") suffix=debug ;;
-    *)        suffix=$1 ;;
-  esac
+  local suffix=$1
   [ -z "$2" ] || suffix=$suffix-test
   echo "$suffix"
+}
+
+# _cmake_build_type <build-type>
+_cmake_build_type() {
+  case "$1" in
+    fast)  echo Release ;;
+    safe)  echo ReleaseSafe ;;
+    debug) echo Debug ;;
+    *)     echo "$1" ;;
+  esac
 }

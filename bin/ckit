@@ -19,7 +19,6 @@ _help() {
   cat <<- _EOF_ >&2
 $PROG builds & tests packages
 Usage: $PROG [options] build     [options] [<target> ...]
-       $PROG [options] build-pkg [options] [<pkg> ...]
        $PROG [options] test      [options] [<pkg> ...]
        $PROG [options] watch     [options]
        $PROG [options] init      [<dir> [<srcdir>]]
@@ -70,9 +69,9 @@ set -- "${FWD_ARGS[@]}" "$@"
 
 [ -n "$COMMAND" ] || COMMAND=build
 case "$COMMAND" in
-  init)                 source "$CKIT_DIR"/misc/cmd-init.sh ;;
-  build|build-pkg|test) source "$CKIT_DIR"/misc/cmd-build.sh ;;
-  watch)                source "$CKIT_DIR"/misc/cmd-watch.sh ;;
-  *)                    _err "unknown command $COMMAND (see $PROG -help)" ;;
+  init)       source "$CKIT_DIR"/misc/cmd-init.sh ;;
+  build|test) source "$CKIT_DIR"/misc/cmd-build.sh ;;
+  watch)      source "$CKIT_DIR"/misc/cmd-watch.sh ;;
+  *)          _err "unknown command $COMMAND (see $PROG -help)" ;;
 esac
 exit $EXIT_CODE

@@ -43,7 +43,7 @@ BUILD_ARGS=()
 BUILD_TARGET=
 BUILD_DIR=
 BUILD_CMD=build
-OPT_RELEASE=false
+OPT_BUILD_TYPE=debug  # "debug" | "fast" | "safe"
 OPT_TEST=
 OPT_RUN=false
 OPT_RUN_SHELL=false
@@ -55,9 +55,12 @@ while [[ $# -gt 0 ]]; do case "$1" in
   -rsh=*)    RUN_ARGS=( "${1:5}" );  OPT_RUN_SHELL=true; shift ;;
 
   # options for both build and watch
-  -release) BUILD_ARGS+=( "$1" ); OPT_RELEASE=true; shift ;;
-  -B)       BUILD_ARGS+=( "$1" ); _expectarg "$1" "$2"; BUILD_DIR="$2"; shift; shift; break ;;
-  -T|-test) BUILD_ARGS+=( "$1" ); OPT_TEST=y; shift ;;
+  -fast|-release) OPT_BUILD_TYPE=fast; shift ;;
+  -safe)          OPT_BUILD_TYPE=safe; shift ;;
+  -debug)         OPT_BUILD_TYPE=debug; shift ;;
+  -B)             BUILD_ARGS+=( "$1" );
+                  _expectarg "$1" "$2"; BUILD_DIR="$2"; shift; shift; break ;;
+  -T|-test)       BUILD_ARGS+=( "$1" ); OPT_TEST=y; shift ;;
 
   --) shift; break ;;
   -*)
@@ -98,26 +101,16 @@ fi
 SRC_DIR=$PWD
 CKIT_PKG_DIR="$CKIT_DIR/pkg"
 
-# BUILD_DIR
-if [ -z "$BUILD_DIR" ]; then
-  # TODO: port this improved "CKIT_PKG_DIR" case to cmd-build.sh
-  case "$SRC_DIR" in
-    "$CKIT_PKG_DIR/"*) BUILD_DIR=$CKIT_DIR/out${SRC_DIR:${#CKIT_PKG_DIR}} ;;
-    *)                 BUILD_DIR=$PWD/out ;;
-  esac
-fi
 if [ -n "$OPT_TEST" ]; then
   BUILD_ARGS+=(-T)
 elif [ "$BUILD_TARGET" == "test" ]; then
   OPT_TEST=y
   BUILD_CMD=test  # run "ckit test" instead of "ckit build"
 fi
-if $OPT_RELEASE; then
-  BUILD_DIR=$BUILD_DIR/$(_build_dir_suffix release $OPT_TEST)
-else
-  BUILD_DIR=$BUILD_DIR/$(_build_dir_suffix debug $OPT_TEST)
-fi
 
+# BUILD_DIR
+[ -n "$BUILD_DIR" ] ||
+  BUILD_DIR=$PWD/out/$(_build_dir_suffix "$OPT_BUILD_TYPE" $OPT_TEST)
 DEPS_FILE=$BUILD_DIR/.deps.txt
 
 # RUN_ARGS: replace "{BUILD}" with the value of $BUILD_DIR
@@ -348,7 +341,9 @@ while true; do
   $FIRST_RUN && $VERBOSE || printf "\x1bc"
 
   # build
+  BUILD_OK=false
   if "$CKIT_EXE" $BUILD_CMD "${BUILD_ARGS[@]}"; then
+    BUILD_OK=true
     [ ${#RUN_ARGS[@]} -eq 0 ] || _run_after_build
   # elif $FIRST_RUN; then
   #   # build failed immediately
@@ -383,7 +378,8 @@ while true; do
     | grep -E "^    ${SRC_DIR//\./\\.}/|    \." \
     | sed -e 's/^    //' \
     | grep -v "^$BUILD_DIR" \
-    >> "$WATCH_FILES_FILE"
+    | sed -e 's@^../../@'"$SRC_DIR/"'@' \
+    >> "$WATCH_FILES_FILE" || true
   _popd
 
   WATCH_FILES=( $(sort -u "$WATCH_FILES_FILE") )

@@ -1,6 +1,6 @@
 BUILD_TOOL_ARGS=()
 OPT_BUILD_DIR=
-OPT_RELEASE=false
+OPT_BUILD_TYPE=debug  # "debug" | "fast" | "safe"
 OPT_TEST=
 OPT_CLEAN=false
 
@@ -13,27 +13,14 @@ $(_help_common_options)
 _EOF_
 }
 
-_help_build_pkg() {
-  cat <<- _EOF_ >&2
-Build packages
-Usage: $PROG $COMMAND [options] [<pkg> ...]
-options:
-  -O, -release  Build release variant instead of debug variant.
-  -T, -test     Build with tests enabled.
-  -B <dir>      Specify explicit build directory. Overrides -T and -O.
-$(_cmd_common_options)
-<pkg>
-  Either the name of a package in $(_nicedir "$CKIT_DIR/pkg") or a directory path.
-  Defaults to the current working directory if not provided.
-_EOF_
-}
-
 _help_build() {
   cat <<- _EOF_ >&2
 Build current package
 Usage: $PROG $COMMAND [options] [<$BUILD_TOOL-arg> ...]
 options:
-  -O, -release  Build release variant instead of debug variant.
+  -debug        Build debug variant (this is the default.)
+  -fast         Build release variant without assertions.
+  -safe         Build release variant with assertions enabled.
   -T, -test     Build with tests enabled.
   -B <dir>      Specify explicit build directory. Overrides -T and -O.
 $(_cmd_common_options)
@@ -59,10 +46,9 @@ _EOF_
 
 _help() {
   case "$COMMAND" in
-    build-pkg) _help_build_pkg ;;
-    test)      _help_test ;;
-    build)     _help_build ;;
-    *)         _err "unexpected COMMAND=$COMMAND"
+    test)  _help_test ;;
+    build) _help_build ;;
+    *)     _err "unexpected COMMAND=$COMMAND"
   esac
 }
 
@@ -93,21 +79,11 @@ _build_pkg() {
 
   # select build directory
   local BUILD_DIR=$OPT_BUILD_DIR
-  if [ -z "$BUILD_DIR" ]; then
-    case "$SRC_DIR" in
-      "$CKIT_DIR/pkg/"*) BUILD_DIR=$CKIT_DIR/out/$pkg ;;
-      *)                  BUILD_DIR=$PWD/out ;;
-    esac
-  fi
+  [ -n "$BUILD_DIR" ] ||
+    BUILD_DIR=$PWD/out/$(_build_dir_suffix "$OPT_BUILD_TYPE" $OPT_TEST)
 
-  # build mode affects BUILD_DIR and CMAKE_BUILD_TYPE
-  # _build_dir_suffix <build-type> <enable-tests>
-  CMAKE_BUILD_TYPE=Debug
-  if $OPT_RELEASE; then
-    CMAKE_BUILD_TYPE=Release
-  fi
-  CMAKE_ARGS+=( -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE" )
-  BUILD_DIR=$BUILD_DIR/$(_build_dir_suffix "$CMAKE_BUILD_TYPE" $OPT_TEST)
+  # build type affects BUILD_DIR and CMAKE_BUILD_TYPE
+  CMAKE_ARGS+=( -DCMAKE_BUILD_TYPE="$(_cmake_build_type "$OPT_BUILD_TYPE")" )
 
   # enable tests
   if [ -n "$OPT_TEST" ]; then
@@ -164,12 +140,14 @@ REST_ARGS=()
 # Note: cmd-watch.sh duplicates a subset of the following code.
 # If you make changes here, make sure to also check cmd-watch.sh.
 while [[ $# -gt 0 ]]; do case "$1" in
-  -O|-release) OPT_RELEASE=true; shift ;;
-  -T|-test)    OPT_TEST=y; shift ;;
-  -clean)      OPT_CLEAN=true; shift ;;
-  -B)          _expectarg "$1" "$2"; OPT_BUILD_DIR="$2"; shift; shift; break ;;
-  -bt)         _expectarg "$1" "$2"; BUILD_TOOL_ARGS+=("$2"); shift; shift; break ;;
-  --)          shift; REST_ARGS+=( "$@" ); break ;;
+  -fast|-release) OPT_BUILD_TYPE=fast; shift ;;
+  -safe)          OPT_BUILD_TYPE=safe; shift ;;
+  -debug)         OPT_BUILD_TYPE=debug; shift ;;
+  -T|-test)       OPT_TEST=y; shift ;;
+  -clean)         OPT_CLEAN=true; shift ;;
+  -B)             _expectarg "$1" "$2"; OPT_BUILD_DIR="$2"; shift; shift; break ;;
+  -bt)            _expectarg "$1" "$2"; BUILD_TOOL_ARGS+=("$2"); shift; shift; break ;;
+  --)             shift; REST_ARGS+=( "$@" ); break ;;
   -*)
     set +e ; _try_parse_common_option "$@" ; N=$? ; set -e
     if [ $N -eq 0 ]; then
