@@ -1,27 +1,25 @@
 #pragma once
-
 // R_MEM_DEBUG_ALLOCATIONS: define to dlog all calls to alloc, realloc and free.
 //#define R_MEM_DEBUG_ALLOCATIONS
-
 #if __has_attribute(malloc)
   #define R_ATTR_MALLOC __attribute__((malloc))
 #else
   #define R_ATTR_MALLOC
 #endif
-
 #if __has_attribute(alloc_size)
   #define R_ATTR_ALLOC_SIZE(whicharg) __attribute__((alloc_size(whicharg)))
 #else
   #define R_ATTR_ALLOC_SIZE(whicharg)
 #endif
-
 ASSUME_NONNULL_BEGIN
+
 
 // Mem is the handle of a memory allocator
 typedef const struct MemAllocator* Mem;
 
-// MemGenericAllocator returns a shared generic allocator which is thread safe.
+// MemGeneric returns a shared generic heap allocator which is thread safe.
 static Mem MemGeneric();
+
 
 // mem2alloc allocates memory of at least size. Returned memory is zeroed.
 static void* nullable memalloc(Mem m, size_t size)
