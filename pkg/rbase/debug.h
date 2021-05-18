@@ -65,12 +65,37 @@ ASSUME_NONNULL_BEGIN
   #endif
   #define assertf(cond, fmt, ...) do{}while(0)
   #define assertop(a,op,b)        do{}while(0)
+  #define assertcstreq(a,b)       do{}while(0)
   #define asserteq(a,b)           do{}while(0)
   #define assertne(a,b)           do{}while(0)
   #define assertnull(a)           do{}while(0)
   #define assertnotnull(a)        (a)
 #endif /* !defined(NDEBUG) */
 
+
+// assert*_debug macros are only included in debug builds, not "safe" builds.
+#if defined(DEBUG) && !defined(NDEBUG)
+  #define assert_debug         assert
+  #define assertf_debug        assertf
+  #define assertop_debug       assertop
+  #define assertcstreq_debug   assertcstreq
+  #define asserteq_debug       asserteq
+  #define assertne_debug       assertne
+  #define assertnull_debug     assertnull
+  #define assertnotnull_debug  assertnotnull
+#else
+  #define assert_debug         do{}while(0)
+  #define assertf_debug        do{}while(0)
+  #define assertop_debug       do{}while(0)
+  #define assertcstreq_debug   do{}while(0)
+  #define asserteq_debug       do{}while(0)
+  #define assertne_debug       do{}while(0)
+  #define assertnull_debug     do{}while(0)
+  #define assertnotnull_debug  (a)
+#endif
+
+
+// -------------------------
 
 #if defined(DEBUG) || defined(R_TESTING_ENABLED)
 

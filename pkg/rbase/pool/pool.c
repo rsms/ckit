@@ -108,6 +108,7 @@ R_TEST(pool) {
 
 R_TEST(pool_fuzz_mt) {
   // test fuzzing with threads
+  Mem mem = MemGeneric();
   const u32 numthreads = 10;
   const u32 numentries = 10; // per thread
   Pool fl = {};
@@ -127,7 +128,7 @@ R_TEST(pool_fuzz_mt) {
     TestThread* t = &threads[i];
     t->id = i;
     t->fl = &fl;
-    t->entriesv = memalloc(NULL, sizeof(void*) * numentries);
+    t->entriesv = memalloc(mem, sizeof(void*) * numentries);
     t->entriesc = numentries;
     assert(thrd_create(&t->t, test_thread, t) == thrd_success);
   }
@@ -161,7 +162,7 @@ R_TEST(pool_fuzz_mt) {
 
   // free heap-allocated memory
   for (u32 i = 0; i < numthreads; i++) {
-    memfree(NULL, threads[i].entriesv);
+    memfree(mem, threads[i].entriesv);
   }
 }
 

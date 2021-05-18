@@ -10,7 +10,7 @@ ASSUME_NONNULL_BEGIN
   #endif
 #endif
 
-bool fs_mkdirs(Mem nullable mem, const char* dir, mode_t mode);
+bool fs_mkdirs(Mem mem, const char* dir, mode_t mode);
 
 // DirEntry is a portable dirent struct
 typedef struct DirEntry {

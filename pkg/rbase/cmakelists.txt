@@ -9,7 +9,7 @@ add_library(rbase
   fs.c
   hash.c
   mem.c
-  mem_dlmalloc.c
+  mem_pagesize.c
   panic.c
   parseint.c
   path.c

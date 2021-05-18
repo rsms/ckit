@@ -47,20 +47,18 @@ ASSUME_NONNULL_BEGIN
       testing_add_test(&t);                                           \
     }                                                                 \
     static void NAME##_test(Testing* unittest)
-
-  // #ifdef NDEBUG
-  //   #warning "R_TESTING_ENABLED is enabled while NDEBUG is defined; tests may fail"
-  // #endif
+  #define R_TEST_END
 
   // make sure "#if R_TESTING_ENABLED" works
   #undef R_TESTING_ENABLED
   #define R_TESTING_ENABLED 1
 #else
-  #warning "R_TESTING_ENABLED is not set"
   #define R_TEST(name) \
-    __attribute__((unused)) inline static void name##_test()
+    _Pragma("GCC diagnostic push") \
+    _Pragma("GCC diagnostic ignored \"-Wunused-variable\"") \
+    __attribute__((unused,pure)) static void name##_test()
+  #define R_TEST_END _Pragma("GCC diagnostic pop")
   #define testing_main(argc, argv) 0
 #endif /* defined(R_TESTING_ENABLED) */
-
 
 ASSUME_NONNULL_END

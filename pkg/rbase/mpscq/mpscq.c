@@ -31,7 +31,8 @@ bool MPSCQueueEnqueue(MPSCQueue* q, void *obj) {
   // increment the head, which gives us 'exclusive' access to that element
   size_t head = atomic_fetch_add_explicit(&q->head, 1, memory_order_acquire);
   assert(q->buffer[head % q->max] == 0);
-  void *rv = atomic_exchange_explicit(&q->buffer[head % q->max], obj, memory_order_release);
+  UNUSED void *rv;
+  rv = atomic_exchange_explicit(&q->buffer[head % q->max], obj, memory_order_release);
   assert(rv == NULL);
   return true;
 }
@@ -49,7 +50,8 @@ void* MPSCQueueDequeue(MPSCQueue* q) {
   }
   if(++q->tail >= q->max)
     q->tail = 0;
-  size_t r = atomic_fetch_sub_explicit(&q->count, 1, memory_order_release);
+  UNUSED size_t r;
+  r = atomic_fetch_sub_explicit(&q->count, 1, memory_order_release);
   assert(r > 0);
   return ret;
 }

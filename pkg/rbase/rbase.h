@@ -18,6 +18,7 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #ifndef _RBASE_H_
 #define _RBASE_H_
 #include "defs.h"
+#include "atomic.h"
 
 #ifdef __cplusplus
 extern "C" {
