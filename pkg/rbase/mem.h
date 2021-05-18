@@ -40,14 +40,14 @@ static void memfree(Mem m, void* ptr);
 size_t mem_pagesize();
 
 // memdup makes a copy of src
-static void* memdup(Mem m, const void* src, size_t len);
+static void* nullable memdup(Mem m, const void* src, size_t len);
 
 // memdup2 is like memdup but takes an additional arg extraspace for allocating additional
 // uninitialized space after len.
-void* memdup2(Mem m, const void* src, size_t len, size_t extraspace);
+void* nullable memdup2(Mem m, const void* src, size_t len, size_t extraspace);
 
 // memstrdup is like strdup but uses m
-char* memstrdup(Mem m, const char* nonull pch);
+char* nullable memstrdup(Mem m, const char* nonull pch);
 
 
 // MemAllocator is the implementation interface for an allocator
@@ -62,11 +62,11 @@ typedef struct MemAllocator {
 // implementation
 
 
-static void* _mem_generic_alloc(Mem _, size_t size) {
+static void* nullable _mem_generic_alloc(Mem _, size_t size) {
   return calloc(1, size);
 }
 
-static void* _mem_generic_realloc(Mem _, void* ptr, size_t newsize) {
+static void* nullable _mem_generic_realloc(Mem _, void* ptr, size_t newsize) {
   return realloc(ptr, newsize);
 }
 
