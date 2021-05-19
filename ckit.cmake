@@ -6,8 +6,17 @@ cmake_policy(SET CMP0057 NEW) # "IN LIST" operator
 set(CKIT_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(CKIT_RBASE_DIR ${CKIT_DIR}/pkg/rbase)
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_C_STANDARD 11)
+# Set default langauge standards.
+# Note that we have to use add_compile_options instead of setting CMAKE_CXX_STANDARD
+# and CMAKE_C_STANDARD as the latter is appended to the end of compiler flags at
+# build time while add_compile_options is added to the beginning, making it possible
+# for projects to override.
+# set(CMAKE_CXX_STANDARD 14)
+# set(CMAKE_C_STANDARD 11)
+add_compile_options(
+  $<$<COMPILE_LANGUAGE:C>:-std=c11>
+  $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>
+)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
