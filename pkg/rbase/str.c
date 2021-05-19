@@ -252,9 +252,9 @@ bool str_hasprefixn(Str s, const char* prefix, u32 prefixlen) {
 
 R_TEST(str) {
 
-  const int nfill = ALLOC_MIN * 2;
-  const int iterations = 4;
-  const size_t checkbufsize = ((size_t)nfill * (size_t)iterations) + 1;
+  #define nfill        (ALLOC_MIN * 2)
+  #define iterations   4
+  #define checkbufsize (((size_t)nfill * (size_t)iterations) + 1)
 
   // used to build comparative data; ensured to be large enough
   char checkbuf[checkbufsize];
