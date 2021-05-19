@@ -11,21 +11,12 @@
   #define memtrace(...)
 #endif
 
-// FIXME: memrealloc is buggy. Use Mem when we have fixed it or replaced dlmalloc
-// #define MEMALLOC(size)        memalloc_raw(NULL, (size))
-// #define MEMREALLOC(ptr, size) memrealloc(NULL, (ptr), (size))
-// #define MEMFREE(ptr)          memfree(NULL, (ptr))
-// For now, use libc malloc et al:
-#define MEMALLOC(size)        malloc((size))
-#define MEMREALLOC(ptr, size) realloc((ptr), (size))
-#define MEMFREE(ptr)          free((ptr))
-
 // memory size of StrHeader h
 #define STR_HDR_SIZE(h) ((u32)(sizeof(struct StrHeader) + (h)->cap + 1))
 
 Str str_new(u32 cap) {
   cap = MAX(cap + 1, ALLOC_MIN);
-  auto h = (struct StrHeader*)MEMALLOC(sizeof(struct StrHeader) + cap);
+  auto h = (struct StrHeader*)R_STR_MEMALLOC(sizeof(struct StrHeader) + cap);
   memtrace("str_alloc %p (size %u)", h, STR_HDR_SIZE(h));
   h->len = 0;
   h->cap = cap - 1;
@@ -47,7 +38,7 @@ void str_free(Str s) {
     h->len = 0;
     h->p[0] = 0;
   #endif
-  MEMFREE(h);
+  R_STR_MEMFREE(h);
 }
 
 Str str_fmt(const char* fmt, ...) {
@@ -70,9 +61,9 @@ Str str_makeroom(Str s, u32 addlen) {
   if (h->cap < 4096)
     h->cap = align2(h->cap * 2, sizeof(size_t));
   // h->cap = h->cap + (addlen - avail);
-  auto h2 = (struct StrHeader*)MEMREALLOC(h, STR_HDR_SIZE(h));
+  auto h2 = (struct StrHeader*)R_STR_MEMREALLOC(h, STR_HDR_SIZE(h));
   #else
-  auto h2 = (struct StrHeader*)MEMALLOC(STR_HDR_SIZE(h) + (addlen - avail));
+  auto h2 = (struct StrHeader*)R_STR_MEMALLOC(STR_HDR_SIZE(h) + (addlen - avail));
   memcpy(h2, h, STR_HDR_SIZE(h));
   h2->cap = h->cap + (addlen - avail);
   #endif

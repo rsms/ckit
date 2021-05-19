@@ -35,7 +35,7 @@ ASSUME_NONNULL_BEGIN
   // testing_main runs all test defined with R_TEST or manually added with testing_add_test.
   //   usage: $0 [filter_prefix]
   //   filter_prefix   If given, only run tests which name has this prefix.
-  int testing_main(int argc, const char* argv[argc+1]);
+  int testing_main(int argc, const char** argv);
 
   // testing_add_test explicity adds a test
   void testing_add_test(Testing*);

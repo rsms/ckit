@@ -77,11 +77,12 @@ typedef signed long            intptr_t;
 #define DIAGNOSTIC_IGNORE_PUSH(x)  _DIAGNOSTIC_IGNORE_PUSH(GCC diagnostic ignored #x)
 #define DIAGNOSTIC_IGNORE_POP      _Pragma("GCC diagnostic pop")
 
-#ifndef __cplusplus
-  #define NORETURN _Noreturn
-  #define auto __auto_type
-#else
+#ifdef __cplusplus
   #define NORETURN noreturn
+#else
+  #define NORETURN      _Noreturn
+  #define auto          __auto_type
+  #define static_assert _Static_assert
 #endif
 
 #if __has_attribute(fallthrough)
@@ -156,6 +157,14 @@ typedef signed long            intptr_t;
   #define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
 #else
   #define WARN_UNUSED_RESULT
+#endif
+
+#if __has_feature(address_sanitizer)
+  // https://clang.llvm.org/docs/AddressSanitizer.html
+  #define ASAN_ENABLED 1
+  #define ASAN_DISABLE_ADDR_ATTR __attribute__((no_sanitize("address"))) /* function attr */
+#else
+  #define ASAN_DISABLE_ADDR_ATTR
 #endif
 
 #ifndef offsetof

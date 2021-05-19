@@ -108,7 +108,7 @@ R_TEST(pool) {
 
 R_TEST(pool_fuzz_mt) {
   // test fuzzing with threads
-  Mem mem = MemGeneric();
+  Mem mem = MemLibC();
   const u32 numthreads = 10;
   const u32 numentries = 10; // per thread
   Pool fl = {};

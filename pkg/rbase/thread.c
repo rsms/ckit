@@ -132,7 +132,10 @@ static int test_thread(void* arg) {
       // dlog("T(%u) read", t->id);
       auto wcount = atomic_load_explicit(t->wcount, memory_order_acquire);
       atomic_fetch_add_explicit(t->wcount_while_reading, wcount, memory_order_acq_rel);
-      thrd_yield();
+      // Note: msleep(1ms) better than thrd_yield() as the latter causes massive delay
+      // when compiling and running with usan.
+      msleep(1);
+      // dlog("yield in");
       atomic_fetch_sub_explicit(t->rcount, 1, memory_order_acq_rel);
       asserteq(rwmtx_runlock(rwmu), thrd_success);
       // dlog("T(%u) released read lock", t->id);
@@ -145,7 +148,7 @@ static int test_thread(void* arg) {
       // dlog("T(%u) write", t->id);
       auto rcount = atomic_load_explicit(t->rcount, memory_order_acquire);
       atomic_fetch_add_explicit(t->rcount_while_writing, rcount, memory_order_acq_rel);
-      thrd_yield();
+      msleep(1);
       atomic_fetch_sub_explicit(t->wcount, 1, memory_order_acq_rel);
       asserteq(rwmtx_unlock(rwmu), thrd_success);
       // dlog("T(%u) released read lock", t->id);

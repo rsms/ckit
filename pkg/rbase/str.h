@@ -64,6 +64,12 @@ static bool str_hasprefix(Str s, Str prefix);
 bool        str_hasprefixn(Str s, const char* prefix, u32 len);
 static bool str_hasprefixcstr(Str s, const char* prefix);
 
+// how string memory is managed
+#ifndef R_STR_MEMALLOC
+  #define R_STR_MEMALLOC(size)        malloc((size))
+  #define R_STR_MEMREALLOC(ptr, size) realloc((ptr), (size))
+  #define R_STR_MEMFREE(ptr)          free((ptr))
+#endif
 
 // -----------------------------------------------------------------------------------------------
 // implementation
