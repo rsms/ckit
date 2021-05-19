@@ -134,6 +134,13 @@ macro(ckit_define_test target)
       target_compile_options(${target}-test PRIVATE ${_compile_options})
     endif()
 
+    ckit_get_link_dependencies(${target} _deps)
+    foreach(_dep IN LISTS _deps)
+      if (NOT (${target} STREQUAL "${_dep}"))
+        target_link_libraries(${target}-test ${_dep})
+      endif()
+    endforeach()
+
     # if (_main_source_file)
     #   target_sources(${target}-test PRIVATE ${_main_source_file})
     #   # Note: R_TESTING_INIT_IMPL makes rbase/testing.c define an init/constructor function
