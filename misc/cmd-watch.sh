@@ -55,11 +55,10 @@ while [[ $# -gt 0 ]]; do case "$1" in
   -rsh=*)    RUN_ARGS=( "${1:5}" );  OPT_RUN_SHELL=true; shift ;;
 
   # options for both build and watch
-  -fast|-release) OPT_BUILD_TYPE=fast; shift ;;
-  -safe)          OPT_BUILD_TYPE=safe; shift ;;
-  -debug)         OPT_BUILD_TYPE=debug; shift ;;
-  -B)             BUILD_ARGS+=( "$1" );
-                  _expectarg "$1" "$2"; BUILD_DIR="$2"; shift; shift; break ;;
+  -fast|-release) BUILD_ARGS+=( "$1" ); OPT_BUILD_TYPE=fast; shift ;;
+  -safe)          BUILD_ARGS+=( "$1" ); OPT_BUILD_TYPE=safe; shift ;;
+  -debug)         BUILD_ARGS+=( "$1" ); OPT_BUILD_TYPE=debug; shift ;;
+  -B)             BUILD_ARGS+=( "$1" ); _expectarg "$1" "$2"; BUILD_DIR="$2"; shift; shift ;;
   -T|-test)       BUILD_ARGS+=( "$1" ); OPT_TEST=y; shift ;;
 
   --) shift; break ;;
