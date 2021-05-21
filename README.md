@@ -3,9 +3,9 @@
 The little C kit
 
 - `bin/ckit` — tool for building and testing projects (calls cmake & ninja)
-- `pkg/` — directory of some packages
-  - The main thing here is `rbase` — basic functionality for C projects
-- `ckit.cmake` — CMake helper file
+- `pkg/rbase` — common functionality for C projects (optional to use)
+- `example/hello/` — an example project
+- `ckit.cmake` — CMake routines
 
 Quick install: (see [Installing](#installing) for details and options)
 
