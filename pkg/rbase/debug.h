@@ -53,6 +53,8 @@ ASSUME_NONNULL_BEGIN
 
   #define asserteq(a,b)    assertop((a),==,(b))
   #define assertne(a,b)    assertop((a),!=,(b))
+  #define assertlt(a,b)    assertop((a),<, (b))
+  #define assertgt(a,b)    assertop((a),>, (b))
   #define assertnull(a)    assertop((a),==,NULL)
   #define assertnotnull(a) ({ \
     __typeof__(a) val__ = (a); \
@@ -68,6 +70,8 @@ ASSUME_NONNULL_BEGIN
   #define assertcstreq(a,b)       do{}while(0)
   #define asserteq(a,b)           do{}while(0)
   #define assertne(a,b)           do{}while(0)
+  #define assertlt(a,b)           do{}while(0)
+  #define assertgt(a,b)           do{}while(0)
   #define assertnull(a)           do{}while(0)
   #define assertnotnull(a)        ({ a; })
 #endif /* !defined(NDEBUG) */
@@ -81,6 +85,8 @@ ASSUME_NONNULL_BEGIN
   #define assertcstreq_debug   assertcstreq
   #define asserteq_debug       asserteq
   #define assertne_debug       assertne
+  #define assertlt_debug       assertlt
+  #define assertgt_debug       assertgt
   #define assertnull_debug     assertnull
   #define assertnotnull_debug  assertnotnull
 #else
@@ -90,6 +96,8 @@ ASSUME_NONNULL_BEGIN
   #define assertcstreq_debug     do{}while(0)
   #define asserteq_debug         do{}while(0)
   #define assertne_debug         do{}while(0)
+  #define assertlt_debug         do{}while(0)
+  #define assertgt_debug         do{}while(0)
   #define assertnull_debug       do{}while(0)
   #define assertnotnull_debug(a) ({ a; })
 #endif
