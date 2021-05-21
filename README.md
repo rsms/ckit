@@ -12,8 +12,8 @@ Quick install: (see [Installing](#installing) for details and options)
 ```sh
 git clone https://github.com/rsms/ckit.git ~/ckit
 cat << EOF >> ~/`[[ $SHELL == *"/zsh" ]] && echo .zshrc || echo .bashrc`
-export CKIT_DIR=$HOME/ckit
-export PATH=$PATH:$CKIT_DIR/bin
+export CKIT_DIR=\$HOME/ckit
+export PATH=\$PATH:\$CKIT_DIR/bin
 EOF
 ```
 
