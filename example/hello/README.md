@@ -2,6 +2,7 @@ This is an example project.
 
 ```
 cd example/hello
+ckit watch test
 ```
 
 ## Things to try
@@ -11,9 +12,10 @@ Build in debug mode and run the product:
 ```
 $ ckit
 [3/3] Linking C executable hello
-./out/debug/hello
+./out/debug/hello sam 123
 argv[0] = ./out/debug/hello (main)
-usage: hello name number
+person's name:   "sam" (3 bytes)
+person's number: 123
 ```
 
 Build in release mode:
