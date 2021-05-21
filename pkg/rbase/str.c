@@ -198,7 +198,7 @@ Str str_appendrepr(Str s, const char* data, u32 len) {
         default: // \xHH
           if (dst + 3 > dstend)
             goto retry;
-          sprintf(dst, "x%X02", c);
+          sprintf(dst, "x%02X", c);
           dst += 3;
           prevesc = true;
           break;
@@ -211,6 +211,19 @@ retry:
   }
   str_setlen(s, (u32)(dst - s));
   return s;
+}
+
+
+Str str_appendhex(Str s, const u8* data, u32 len) {
+  const char* alphabet = "0123456789ABCDEF";
+  s = str_makeroom(s, len * 2);
+  char* p = s + str_len(s);
+  for (u32 i = 0; i < len; i++){
+    *p++ = alphabet[(*data >> 4) & 0xF];
+    *p++ = alphabet[(*data) & 0xF];
+    data++;
+  }
+  return str_setlen(s, str_len(s) + len * 2);
 }
 
 
