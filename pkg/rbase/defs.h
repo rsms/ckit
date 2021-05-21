@@ -176,9 +176,13 @@ typedef signed long            intptr_t;
 
 #define MAX(a,b) \
   ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a > _b ? _a : _b; })
+  // turns into CMP + CMOV{L,G} on x86_64
+  // turns into CMP + CSEL on arm64
 
 #define MIN(a,b) \
   ({__typeof__ (a) _a = (a); __typeof__ (b) _b = (b); _a < _b ? _a : _b; })
+  // turns into CMP + CMOV{L,G} on x86_64
+  // turns into CMP + CSEL on arm64
 
 // division of integer, rounding up
 #define r_idiv_ceil(x, y) (1 + (((x) - 1) / (y)))
