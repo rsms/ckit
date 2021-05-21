@@ -16,6 +16,7 @@ static u32  str_len(ConstStr s);
 static u32  str_cap(ConstStr s); // does not include terminating \0
 static u32  str_avail(ConstStr s);
 static Str  str_setlen(Str s, u32 len); // returns s as a convenience
+static Str  str_trunc(Str s); // == str_setlen(s, 0)
 
 // appending to a string
 Str        str_append(Str s, const char* p, u32 len);
@@ -29,6 +30,10 @@ Str        str_appendfill(Str s, u32 n, char v); // like msmset(str_reserve)
 // str_appendrepr appends a human-readable representation of data to dst as C-format ASCII
 // string literals, with "special" bytes escaped (e.g. \n, \xFE, etc.)
 Str str_appendrepr(Str s, const char* data, u32 len);
+
+// str_appendhex appends a hexadecimal representation of data to s.
+// e.g. ("hello\n",6) => "68656C6C6F0A"
+Str str_appendhex(Str s, const u8* data, u32 len);
 
 // str_reserve reserves len bytes:
 // 1. grows string if needed, possibly reallocating it
@@ -91,6 +96,7 @@ inline static Str str_setlen(Str s, u32 len) {
   s[len] = 0;
   return s;
 }
+inline static Str str_trunc(Str s) { return str_setlen(s, 0); }
 
 inline static Str str_cpycstr(const char* cstr) {
   return str_cpy(cstr, strlen(cstr));
