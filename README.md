@@ -7,6 +7,16 @@ The little C kit
   - The main thing here is `rbase` — basic functionality for C projects
 - `ckit.cmake` — CMake helper file
 
+Quick install: (see [Installing](#installing) for details and options)
+
+```sh
+git clone https://github.com/rsms/ckit.git ~/ckit
+cat << EOF >> ~/`[[ $SHELL == *"/zsh" ]] && echo .zshrc || echo .bashrc`
+export CKIT_DIR=$HOME/ckit
+export PATH=$PATH:$CKIT_DIR/bin
+EOF
+```
+
 
 ## `bin/ckit`
 
