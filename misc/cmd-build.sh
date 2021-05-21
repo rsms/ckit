@@ -83,7 +83,12 @@ _build_pkg() {
     BUILD_DIR=$PWD/out/$(_build_dir_suffix "$OPT_BUILD_TYPE" $OPT_TEST)
 
   # build type affects BUILD_DIR and CMAKE_BUILD_TYPE
-  CMAKE_ARGS+=( -DCMAKE_BUILD_TYPE="$(_cmake_build_type "$OPT_BUILD_TYPE")" )
+  CMAKE_ARGS=( -DCMAKE_BUILD_TYPE="$(_cmake_build_type "$OPT_BUILD_TYPE")" )
+
+  # verbose
+  if $VERBOSE; then
+    CMAKE_ARGS+=( --log-level=VERBOSE )
+  fi
 
   # enable tests
   if [ -n "$OPT_TEST" ]; then
@@ -103,8 +108,8 @@ _build_pkg() {
   local globpat=$(grep -E -v '^[ \t]*#' "$SRC_DIR"/cmakelists.txt \
                 | grep -E '\bfile\(GLOB[^\)]+\)\b' \
                 | sed -E -e 's/^[^"]+"([^"]+)"\)/\1/')
-  if [ -n "$globpat" ]; then
-    local SRC_SHASUM=$(ls $globpat | sha1sum)
+  if [ -n "$globpat" ] && ls $globpat 2> /dev/null 1>&2; then
+    local SRC_SHASUM=$(ls $globpat 2>/dev/null | sha1sum)
     if [ "$(cat "$BUILD_DIR"/rglobsrc.checksum 2>/dev/null)" != "$SRC_SHASUM" ]; then
       echo "$SRC_SHASUM" > "$BUILD_DIR"/rglobsrc.checksum
       if [ -f "$BUILD_DIR"/CMakeCache.txt ]; then
@@ -116,14 +121,15 @@ _build_pkg() {
   # (re)generate build config
   if [ ! -f "$BUILD_DIR"/CMakeCache.txt ] || [ ! -f "$BUILD_DIR"/build.ninja ]; then
     _pushd "$SRC_DIR"
-    cmake -B "$BUILD_DIR" -GNinja "${CMAKE_ARGS[@]}" .
+    _logv cmake -B "$BUILD_DIR" -GNinja "${CMAKE_ARGS[@]}" .
+          cmake -B "$BUILD_DIR" -GNinja "${CMAKE_ARGS[@]}" .
     _popd
   fi
 
   # invoke build tool
   _pushd "$BUILD_DIR"
   _logv $BUILD_TOOL "${BUILD_TOOL_ARGS[@]}" "$@"
-  $BUILD_TOOL "${BUILD_TOOL_ARGS[@]}" "$@"
+        $BUILD_TOOL "${BUILD_TOOL_ARGS[@]}" "$@"
   local status=$?
   _popd
 
