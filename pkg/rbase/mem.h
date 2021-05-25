@@ -75,14 +75,14 @@ typedef struct MemAllocator {
 
 // ---------------------------------
 
-// MemLinearAlloc allocates a new linear allocator.
+// MemLinearAlloc creates a new linear allocator.
 // This is a good choice when you need to burn through a lot of temporary allocations
 // and then free them all. memfree is a noop except for the most recent allocation which simply
 // rewindws the allocator.
 // This allocator is NOT thread safe. Use MemSyncWrapper if MT access is needed.
 Mem nullable MemLinearAlloc();
 
-// MemLinearFree frees all memory allocated in m.
+// MemLinearFree frees all memory allocated in m, including m itself.
 void MemLinearFree(Mem m);
 
 // ---------------------------------
