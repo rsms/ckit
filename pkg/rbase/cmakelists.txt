@@ -10,7 +10,8 @@ add_library(rbase
   hash.c
   mem.c
   mem_arena.c
-  mem_pagesize.c
+  mem_linear.c
+  mem_page.c
   panic.c
   parseint.c
   path.c

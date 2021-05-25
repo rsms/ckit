@@ -53,6 +53,7 @@ void* nullable memdup2(Mem m, const void* src, size_t len, size_t extraspace);
 // memstrdup is like strdup but uses m
 char* nullable memstrdup(Mem m, const char* pch);
 
+// ---------------------------------
 
 // MemAllocator is the implementation interface for an allocator.
 typedef struct MemAllocator {
@@ -72,6 +73,33 @@ typedef struct MemAllocator {
   void (*free)(Mem m, void* ptr);
 } MemAllocator;
 
+// ---------------------------------
+
+// MemLinearAlloc allocates a new linear allocator.
+// This is a good choice when you need to burn through a lot of temporary allocations
+// and then free them all. memfree is a noop except for the most recent allocation which simply
+// rewindws the allocator.
+// This allocator is NOT thread safe. Use MemSyncWrapper if MT access is needed.
+Mem nullable MemLinearAlloc();
+
+// MemLinearFree frees all memory allocated in m.
+void MemLinearFree(Mem m);
+
+// ---------------------------------
+
+// MemSyncWrapper is an allocator wrapper that uses a mtx_t to ensure mutually exclusive access
+// to the alloc, realloc and free functions of the provided allocator m.
+typedef struct MemSyncWrapper {
+  MemAllocator ma;
+  mtx_t        mu;
+  Mem          m;
+} MemSyncWrapper;
+
+// MemSyncWrapperInit initializes w to synchronize multi-thread access to memory m.
+// Returns the new "wrapping" allocator handle.
+Mem MemSyncWrapperInit(MemSyncWrapper* w, Mem m);
+
+// ---------------------------------
 
 // MemArenaShim is a memory arena which delegates memory management to an underlying allocator.
 // This is useful when you want to make a lot of allocations and then free them all at once,
@@ -88,6 +116,23 @@ Mem MemArenaShimInit(MemArenaShim* a, Mem underlying);
 // MemArenaShimFree frees all memory allocated in the arena.
 // The arena and all memory allocated with it is invalid after this call.
 void MemArenaShimFree(MemArenaShim* a);
+
+// ---------------------------------
+
+// MemPageFlags control the behavior of mem_pagealloc
+typedef enum {
+  MemPageDefault     = 0,
+  MemPageGuardHigh = 1 << 0, // mprotect the last page
+  MemPageGuardLow  = 1 << 1, // mprotect the first page (e.g. for stack memory)
+} MemPageFlags;
+
+// mem_pagealloc allocates npages from the OS. Returns NULL on error.
+void* nullable mem_pagealloc(size_t npages, MemPageFlags);
+
+// mem_pagefree frees pages allocated with mem_pagealloc. Returns false and sets errno on error.
+bool mem_pagefree(void* ptr, size_t npages);
+
+// ---------------------------------
 
 /*
 Note on runtime overhead:

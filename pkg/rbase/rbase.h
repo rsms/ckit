@@ -30,6 +30,7 @@ extern "C" {
 
 #include "panic.h"
 #include "debug.h"
+#include "thread.h"
 #include "mem.h"
 #include "hash.h"
 #include "str.h"
@@ -38,7 +39,6 @@ extern "C" {
 #include "testing.h"
 #include "util.h"
 #include "time.h"
-#include "thread.h"
 #include "path.h"
 #include "fs.h"
 

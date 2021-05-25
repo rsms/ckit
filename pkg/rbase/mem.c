@@ -17,3 +17,38 @@ char* memstrdup(Mem mem, const char* pch) {
   s[z] = 0;
   return s;
 }
+
+// ------------------------------------------------------------------------------------
+// MemSyncWrapperInit
+
+static void* nullable _mem_syncw_alloc(Mem m, size_t size) {
+  MemSyncWrapper* w = (MemSyncWrapper*)m;
+  mtx_lock(&w->mu);
+  void* p = m->alloc(w->m, size);
+  mtx_unlock(&w->mu);
+  return p;
+}
+
+static void* nullable _mem_syncw_realloc(Mem m, void* ptr, size_t newsize) {
+  MemSyncWrapper* w = (MemSyncWrapper*)m;
+  mtx_lock(&w->mu);
+  void* p = m->realloc(w->m, ptr, newsize);
+  mtx_unlock(&w->mu);
+  return p;
+}
+
+static void _mem_syncw_free(Mem m, void* ptr) {
+  MemSyncWrapper* w = (MemSyncWrapper*)m;
+  mtx_lock(&w->mu);
+  m->free(w->m, ptr);
+  mtx_unlock(&w->mu);
+}
+
+Mem MemSyncWrapperInit(MemSyncWrapper* w, Mem m) {
+  w->ma.alloc   = _mem_syncw_alloc;
+  w->ma.realloc = _mem_syncw_realloc;
+  w->ma.free    = _mem_syncw_free;
+  mtx_init(&w->mu, mtx_plain);
+  w->m = m;
+  return (Mem)&w->ma;
+}
