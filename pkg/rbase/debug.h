@@ -73,7 +73,7 @@ ASSUME_NONNULL_BEGIN
   #define assertlt(a,b)           do{}while(0)
   #define assertgt(a,b)           do{}while(0)
   #define assertnull(a)           do{}while(0)
-  #define assertnotnull(a)        ({ a; })
+  #define assertnotnull(a)        ({ a; }) /* note: (a) causes "unused" warnings */
 #endif /* !defined(NDEBUG) */
 
 
@@ -90,16 +90,16 @@ ASSUME_NONNULL_BEGIN
   #define assertnull_debug     assertnull
   #define assertnotnull_debug  assertnotnull
 #else
-  #define assert_debug           do{}while(0)
-  #define assertf_debug          do{}while(0)
-  #define assertop_debug         do{}while(0)
-  #define assertcstreq_debug     do{}while(0)
-  #define asserteq_debug         do{}while(0)
-  #define assertne_debug         do{}while(0)
-  #define assertlt_debug         do{}while(0)
-  #define assertgt_debug         do{}while(0)
-  #define assertnull_debug       do{}while(0)
-  #define assertnotnull_debug(a) ({ a; })
+  #define assert_debug(cond)            do{}while(0)
+  #define assertf_debug(cond, fmt, ...) do{}while(0)
+  #define assertop_debug(a,op,b)        do{}while(0)
+  #define assertcstreq_debug(a,b)       do{}while(0)
+  #define asserteq_debug(a,b)           do{}while(0)
+  #define assertne_debug(a,b)           do{}while(0)
+  #define assertlt_debug(a,b)           do{}while(0)
+  #define assertgt_debug(a,b)           do{}while(0)
+  #define assertnull_debug(a)           do{}while(0)
+  #define assertnotnull_debug(a)        ({ a; }) /* note: (a) causes "unused" warnings */
 #endif
 
 
@@ -114,9 +114,11 @@ ASSUME_NONNULL_BEGIN
   unsigned long long: "%llu", \
   unsigned long:      "%lu", \
   unsigned int:       "%u", \
+  unsigned short:     "%u", \
   long long:          "%lld", \
   long:               "%ld", \
   int:                "%d", \
+  short:              "%d", \
   char:               "%c", \
   unsigned char:      "%C", \
   const char*:        "%s", \
