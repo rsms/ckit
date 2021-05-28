@@ -7,6 +7,21 @@
 #endif
 
 
+void unixtime2(i64* sec, u64* nsec) {
+  #ifdef CLOCK_REALTIME
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    *sec = (i64)ts.tv_sec;
+    *nsec = (u64)ts.tv_nsec;
+  #else
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    *sec = (i64)tv.tv_sec;
+    *nsec = ((u64)tv.tv_usec) * 1000;
+  #endif
+}
+
+
 UnixTime unixtime() {
   #ifdef CLOCK_REALTIME
     struct timespec ts;

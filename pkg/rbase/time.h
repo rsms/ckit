@@ -10,6 +10,9 @@ UnixTime unixtime();
 // unixtime_sec returns the current real time as a UNIX timestamp with second precision.
 u64 unixtime_sec();
 
+// unixtime2 returns the second and nanasecond parts as two integers
+void unixtime2(i64* sec, u64* nsec);
+
 // nanotime returns nanoseconds measured from an undefined point in time.
 // It uses the most high-resolution, low-latency clock available on the system.
 u64 nanotime();
