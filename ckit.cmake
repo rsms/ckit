@@ -15,7 +15,9 @@ set(CKIT_RBASE_DIR ${CKIT_DIR}/pkg/rbase)
 # set(CMAKE_C_STANDARD 11)
 add_compile_options(
   $<$<COMPILE_LANGUAGE:C>:-std=c11>
+  $<$<COMPILE_LANGUAGE:OBJC>:-std=c11>
   $<$<COMPILE_LANGUAGE:CXX>:-std=c++14>
+  $<$<COMPILE_LANGUAGE:OBJCXX>:-std=c++14>
 )
 
 if(NOT CMAKE_BUILD_TYPE)
