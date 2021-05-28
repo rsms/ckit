@@ -17,6 +17,8 @@ static u32  str_cap(ConstStr s); // does not include terminating \0
 static u32  str_avail(ConstStr s);
 static Str  str_setlen(Str s, u32 len); // returns s as a convenience
 static Str  str_trunc(Str s); // == str_setlen(s, 0)
+static int  str_cmp(ConstStr a, ConstStr b); // == memcmp
+static bool str_eq(ConstStr a, ConstStr b);
 
 // appending to a string
 Str        str_append(Str s, const char* p, u32 len);
@@ -97,6 +99,16 @@ inline static Str str_setlen(Str s, u32 len) {
   return s;
 }
 inline static Str str_trunc(Str s) { return str_setlen(s, 0); }
+
+inline static int str_cmp(ConstStr a, ConstStr b) {
+  return memcmp(a, b, MIN(str_len(a), str_len(b)));
+}
+
+inline static bool str_eq(ConstStr a, ConstStr b) {
+  const size_t az = str_len(a);
+  const size_t bz = str_len(b);
+  return az == bz && memcmp(a, b, az) == 0;
+}
 
 inline static Str str_cpycstr(const char* cstr) {
   return str_cpy(cstr, strlen(cstr));
