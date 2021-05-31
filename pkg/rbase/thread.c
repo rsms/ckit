@@ -106,6 +106,54 @@ int rwmtx_unlock(rwmtx_t* m) {
   }
 }
 
+
+// -----------------------------------------------------------------------------------------------
+// r_sync_once
+// flag states:
+//   0 = uninitialized
+//   1 = initializing mutex
+//   2 = mutex available, running "once code"
+//   3 = "once code" has been run
+
+bool _sync_once_start(r_sync_once_flag* fl) {
+  u32 zero = 0;
+  if (atomic_compare_exchange_strong_explicit(
+    &fl->flag, &zero, 1, r_memory_order(acq_rel), r_memory_order(relaxed)))
+  {
+    // winning thread
+    // initialize and lock mutex used to sync racing loser threads
+    mtx_init((mtx_t*)&fl->mu, mtx_plain);
+    mtx_lock((mtx_t*)&fl->mu);
+    // signal to loser threads spinning that the mutex is available
+    atomic_fetch_add_explicit(&fl->flag, 1, memory_order_acq_rel);
+    return true;
+  }
+  // loser thread
+  // wait for fl->mu to be ready
+  while (1) {
+    u32 flag = AtomicLoadAcq(&fl->flag);
+    if (flag > 1) {
+      // mutext is available
+      if (flag == 3) {
+        // "once code" has completed
+        return false;
+      }
+      break;
+    }
+  }
+  // wait for "once code" to complete
+  mtx_lock((mtx_t*)&fl->mu);
+  mtx_unlock((mtx_t*)&fl->mu);
+  // TODO: consider ways we could free fl->mu with mtx_destroy
+  return false;
+}
+
+void _sync_once_end(r_sync_once_flag* fl) {
+  atomic_store_explicit(&fl->flag, 3, memory_order_release);
+  mtx_unlock((mtx_t*)&fl->mu);
+}
+
+
 // -----------------------------------------------------------------------------------------------
 #if R_TESTING_ENABLED
 
@@ -193,7 +241,7 @@ R_TEST(rwmtx_threads) {
   rwmtx_init(&rwmu, mtx_plain);
 
   // spawn an even number of threads where every odd thread writes and every even thread reads
-  TestThread threads[8] = {};
+  TestThread threads[8] = {0};
   atomic_u32 rcount = 0; // current number of writes
   atomic_u32 wcount = 0; // current number of writes
   atomic_u32 rcount_while_writing = 0; // value of rcount while writing
@@ -229,6 +277,55 @@ R_TEST(rwmtx_threads) {
   asserteq(AtomicLoadAcq(&rcount_while_writing), 0);
 
   rwmtx_destroy(&rwmu);
+}
+
+
+static int sync_once_test_thread(void* arg) {
+  TestThread* t = (TestThread*)arg;
+  static r_sync_once_flag onceflag;
+  static atomic_u32 value = 0;
+  // write once
+  r_sync_once(&onceflag, {
+    msleep(1); // sleep a short while to ensure the winning thread lags
+    AtomicStore(&value, 1);
+    atomic_fetch_add_explicit(t->wcount, 1, memory_order_acq_rel);
+  });
+  // read every time
+  if (AtomicLoad(&value) == 1)
+    atomic_fetch_add_explicit(t->rcount, 1, memory_order_acq_rel);
+  return 0;
+}
+
+
+R_TEST(sync_once) {
+
+  // spawn an even number of threads where every odd thread writes and every even thread reads
+  TestThread threads[8] = {0};
+  size_t nthreads = countof(threads);
+  atomic_u32 wcount = 0; // current number of writes
+  atomic_u32 rcount = 0; // current number of successful reads
+
+  // spawn threads
+  for (u32 i = 0; i < nthreads; i++) {
+    TestThread* t = &threads[i];
+    t->id = i;
+    t->wcount = &wcount;
+    t->rcount = &rcount;
+    assert(thrd_create(&t->t, sync_once_test_thread, t) == thrd_success);
+  }
+
+  // wait for threads to finish
+  for (u32 i = 0; i < nthreads; i++) {
+    auto t = &threads[i];
+    int returnValue;
+    thrd_join(t->t, &returnValue);
+  }
+
+  // should have written only once
+  asserteq(AtomicLoadAcq(&wcount), 1);
+
+  // should have read the expected value every time
+  asserteq(AtomicLoadAcq(&rcount), nthreads);
 }
 
 

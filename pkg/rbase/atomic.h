@@ -60,13 +60,14 @@
   atomic_compare_exchange_strong_explicit( \
     (p), (oldval), (newval), r_memory_order(acq_rel), r_memory_order(consume))
 
-// r_atomic_once(flag, statement):
-//   static r_atomic_once_flag once;
-//   r_atomic_once(&once, { /* only run once */ });
-#define r_atomic_once_flag _Atomic(u32)
-#define r_atomic_once(flagptr, stmt) \
-  ({ u32 zero = 0; \
-     if (atomic_compare_exchange_strong_explicit(\
-         (flagptr), &zero, 1, r_memory_order(acq_rel), r_memory_order(relaxed))) \
-       stmt; \
-  })
+// // r_atomic_once(flag, statement):
+// //   static r_atomic_once_flag once;
+// //   r_atomic_once(&once, { /* only run once */ });
+// // Note: Threads losing the race does NOT wait or sync. Use r_sync_once() for that instead.
+// #define r_atomic_once_flag _Atomic(u32)
+// #define r_atomic_once(flagptr, stmt) \
+//   ({ u32 zero = 0; \
+//      if (atomic_compare_exchange_strong_explicit(\
+//          (flagptr), &zero, 1, r_memory_order(acq_rel), r_memory_order(relaxed))) \
+//        stmt; \
+//   })

@@ -12,6 +12,9 @@ add_library(rbase
   mem_arena.c
   mem_linear.c
   mem_page.c
+  os_exepath.c
+  os_getcwd.c
+  os_stacktrace.c
   panic.c
   parseint.c
   path.c
@@ -30,25 +33,20 @@ add_library(rbase
   pool/pool.c
 )
 
+# backtrace
+if (NOT (${CMAKE_BUILD_TYPE} MATCHES "Debug"))
+  # for non-debug builds, disable -llzma and -lz
+  set(BACKTRACE_DISABLE_LIB_LZMA 1)
+  set(BACKTRACE_DISABLE_LIB_Z 1)
+endif()
+add_subdirectory(backtrace EXCLUDE_FROM_ALL)
+if(BACKTRACE_SUPPORTED)
+  target_link_libraries(rbase PRIVATE backtrace)
+  target_compile_definitions(rbase PRIVATE HAVE_LIBBACKTRACE)
+endif()
+
+
 ckit_define_test(rbase)
 
-target_precompile_headers(rbase
-  PUBLIC
-    rbase.h
-  # PRIVATE
-  #   [["other_header.h"]]
-  #   <unordered_map>
-)
-
-# file(GLOB rbase_headers "*.h")
-# list(FILTER rbase_headers EXCLUDE REGEX "^mem_")
-# list(FILTER rbase_headers EXCLUDE REGEX "^thread_")
-# message("rbase_headers ${rbase_headers}")
-# target_include_directories(rbase PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-# target_link_libraries(rbase PUBLIC rbase_headers)
-
-# file(GLOB RBASE_SOURCES "*.c")
-# file(GLOB_RECURSE RBASE_SOURCES "*.c")
-# list(FILTER RBASE_SOURCES EXCLUDE REGEX "_test\\.c$")
-# message("RBASE_SOURCES: ${RBASE_SOURCES}")
-# add_library(rbase ${RBASE_SOURCES})
+# precompile the main header to speed up uses in other projects
+target_precompile_headers(rbase PUBLIC rbase.h)

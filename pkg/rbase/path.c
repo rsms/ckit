@@ -116,3 +116,19 @@ R_TEST(path_base) {
   #undef S
   str_free(s);
 }
+
+
+const char* path_cwdrel(const char* path) {
+  if (!path_isabs(path))
+    return path;
+  Str cwd = os_getcwd_str();
+  size_t pathlen = strlen(path);
+  size_t cwdlen = str_len(cwd);
+  if (cwdlen != 0 && cwdlen < pathlen && memcmp(cwd, path, cwdlen) == 0) {
+    // path has prefix cwd
+    path = &path[cwdlen + 1]; // e.g. "/foo/bar/baz" => "bar/baz"
+  }
+  str_free(cwd);
+  return path;
+}
+

@@ -87,6 +87,25 @@ int rwmtx_lock(rwmtx_t* m);      // acquire read+write lock (blocks until acquir
 int rwmtx_trylock(rwmtx_t* m);   // attempt to acquire read+write lock (non-blocking)
 int rwmtx_unlock(rwmtx_t* m);    // release read+write lock
 
+// r_sync_once(flag, statement) -- execute code exactly once.
+// Threads losing the race will wait for the winning thread to complete.
+// Example use:
+//   static r_sync_once_flag once;
+//   r_sync_once(&once, { /* expensive work */ });
+//
+#define r_sync_once(flagptr, stmt) \
+  if (R_UNLIKELY(AtomicLoadAcq(&(flagptr)->flag) < 3 && _sync_once_start(flagptr))) { \
+    stmt; \
+    _sync_once_end(flagptr); \
+  }
+typedef struct r_sync_once_flag {
+  _Atomic(u32)   flag;
+  volatile mtx_t mu;
+} r_sync_once_flag;
+bool _sync_once_start(r_sync_once_flag* fl);
+void _sync_once_end(r_sync_once_flag* fl);
+
+
 // ----------------------------------------------------------------------------
 //  inline implementations
 

@@ -2,7 +2,7 @@
 //
 // void errlog(const char* fmt, ...)
 // void panic(const char* fmt, ...)
-// bool stacktrace_fwrite(FILE* fp, int offset_frames)
+// void stacktrace_fwrite(FILE* fp, int offset_frames)
 //
 // void _errlog(const char* fmt, ...)
 // _Noreturn void _panic(const char* file, int line, const char* func, const char* fmt, ...);
@@ -29,10 +29,6 @@ ASSUME_NONNULL_BEGIN
 
 // panic prints msg (and errno, if non-zero) to stderr and calls exit(2)
 #define panic(fmt, ...) _panic(__FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
-
-// stacktrace_fwrite attempts to produce and write a stack backtrace to fp.
-// Its ouput is system-dependent. Returns true on success or false if nothing was written.
-bool stacktrace_fwrite(FILE* fp, int offset_frames);
 
 void _errlog(const char* fmt, ...) ATTR_FORMAT(printf, 1, 2);
 

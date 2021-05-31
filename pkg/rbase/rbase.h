@@ -34,6 +34,7 @@ extern "C" {
 #include "mem.h"
 #include "hash.h"
 #include "str.h"
+#include "os.h"
 #include "unicode.h"
 #include "parseint.h"
 #include "testing.h"

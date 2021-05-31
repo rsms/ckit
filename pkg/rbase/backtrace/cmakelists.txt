@@ -1,0 +1,179 @@
+cmake_minimum_required(VERSION 3.12)
+project(backtrace LANGUAGES C)
+# include($ENV{CKIT_DIR}/ckit.cmake)
+# ckit_configure_project(C)
+
+set(BACKTRACE_SUPPORTED 1 PARENT_SCOPE)
+
+add_library(${PROJECT_NAME}
+  dwarf.c
+  fileline.c
+  posix.c
+  print.c
+  sort.c
+  state.c
+)
+
+target_include_directories(${PROJECT_NAME}
+  PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}"
+)
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+  _GNU_SOURCE
+)
+
+# -------------------------------------------------------------------------------
+# check
+
+include(CheckSymbolExists)
+include(CheckFunctionExists)
+include(CheckCCompilerFlag)
+include(CheckIncludeFile)
+
+check_function_exists(fcntl HAVE_FCNTL)
+check_function_exists(strnlen HAVE_DECL_STRNLEN)
+check_function_exists(getexecname HAVE_GETEXECNAME)
+check_function_exists(clock_gettime HAVE_CLOCK_GETTIME)
+check_function_exists(getpagesize HAVE_DECL_GETPAGESIZE)
+check_function_exists(lstat HAVE_LSTAT)
+check_function_exists(readlink HAVE_READLINK)
+
+check_symbol_exists(dl_iterate_phdr link.h HAVE_DL_ITERATE_PHDR)
+
+check_include_file(dlfcn.h HAVE_DLFCN_H)
+check_include_file(inttypes.h HAVE_INTTYPES_H)
+check_include_file(link.h HAVE_LINK_H)
+check_include_file(mach-o/dyld.h HAVE_MACH_O_DYLD_H)
+check_include_file(memory.h HAVE_MEMORY_H)
+check_include_file(stdint.h HAVE_STDINT_H)
+check_include_file(stdlib.h HAVE_STDLIB_H)
+check_include_file(strings.h HAVE_STRINGS_H)
+check_include_file(string.h HAVE_STRING_H)
+check_include_file(sys/ldr.h HAVE_SYS_LDR_H)
+check_include_file(sys/mman.h HAVE_SYS_MMAN_H)
+check_include_file(sys/stat.h HAVE_SYS_STAT_H)
+check_include_file(sys/types.h HAVE_SYS_TYPES_H)
+check_include_file(unistd.h HAVE_UNISTD_H)
+
+if(CMAKE_EXECUTABLE_FORMAT STREQUAL "ELF")
+  target_sources(${PROJECT_NAME} PRIVATE elf.c)
+  math(EXPR BACKTRACE_ELF_SIZE 8*${CMAKE_C_SIZEOF_DATA_PTR})
+elseif(CMAKE_EXECUTABLE_FORMAT STREQUAL "MACHO")
+  target_sources(${PROJECT_NAME} PRIVATE macho.c)
+else()
+  # TODO: COFF
+  # pecoff.c
+  # xcoff.c
+  target_sources(${PROJECT_NAME} PRIVATE unknown.c)
+  set(BACKTRACE_SUPPORTED 0 PARENT_SCOPE)
+  message(STATUS "Executable format ${CMAKE_EXECUTABLE_FORMAT} not supported")
+endif()
+
+check_symbol_exists(_Unwind_Backtrace unwind.h HAVE_BACKTRACE)
+check_symbol_exists(_Unwind_GetIPInfo unwind.h HAVE_GETIPINFO)
+if(HAVE_BACKTRACE)
+  target_sources(${PROJECT_NAME} PRIVATE backtrace.c simple.c)
+else()
+  target_sources(${PROJECT_NAME} PRIVATE nounwind.c)
+  set(BACKTRACE_SUPPORTED 0 PARENT_SCOPE)
+  message (STATUS "_Unwind_Backtrace() not found. Disabling Backtrace support.")
+endif()
+
+check_c_compiler_flag("-funwind-tables" FLAG_UNWIND_TABLES)
+if (FLAG_UNWIND_TABLES)
+  target_compile_options(${PROJECT_NAME} PRIVATE "-funwind-tables")
+endif()
+
+check_c_source_compiles(
+  "int i;
+  int main() {
+    __sync_bool_compare_and_swap (&i, i, i);
+    __sync_lock_test_and_set (&i, 1);
+    __sync_lock_release (&i);
+  }"
+  HAVE_SYNC_FUNCTIONS)
+if(HAVE_SYNC_FUNCTIONS)
+  set(BACKTRACE_SUPPORTS_THREADS 1)
+else()
+  set(BACKTRACE_SUPPORTS_THREADS 0)
+endif()
+
+check_c_source_compiles (
+  "int i;
+  int main() {
+    __atomic_load_n (&i, __ATOMIC_ACQUIRE);
+    __atomic_store_n (&i, 1, __ATOMIC_RELEASE);
+  }"
+  HAVE_ATOMIC_FUNCTIONS)
+
+check_symbol_exists(mmap sys/mman.h HAVE_MMAP)
+set(BACKTRACE_USES_MALLOC 1)
+if(HAVE_MMAP)
+  target_sources(${PROJECT_NAME} PRIVATE mmapio.c)
+  check_symbol_exists(MAP_ANONYMOUS sys/mman.h HAVE_MMAP_ANONYMOUS)
+  check_symbol_exists(MAP_ANON sys/mman.h HAVE_MMAP_ANON)
+  if(HAVE_MMAP_ANONYMOUS AND HAVE_MMAP_ANON)
+    target_sources(${PROJECT_NAME} PRIVATE mmap.c)
+    set(BACKTRACE_USES_MALLOC 0)
+  else()
+    target_sources(${PROJECT_NAME} PRIVATE alloc.c)
+  endif()
+else()
+  target_sources(${PROJECT_NAME} PRIVATE read.c alloc.c)
+endif()
+
+# check_include_file(dwarf.h HAVE_DWARF_H)
+# check_include_file(libdwarf/dwarf.h HAVE_LIBDWARF_DWARF_H)
+# if (HAVE_DWARF_H AND HAVE_LIBDWARF_DWARF_H)
+#   target_sources(${PROJECT_NAME} PRIVATE dwarf.c)
+# else()
+#   target_sources(${PROJECT_NAME} PRIVATE unknown.c)
+#   set(BACKTRACE_SUPPORTED 0 PARENT_SCOPE)
+#   message (STATUS "libdwarf not found. Disabling Backtrace support.")
+# endif()
+
+check_symbol_exists(KERN_PROC sys/sysctl.h HAVE_KERN_PROC_1)
+if(HAVE_KERN_PROC_1)
+  check_symbol_exists(KERN_PROC_PATHNAME sys/sysctl.h HAVE_KERN_PROC)
+  if(HAVE_KERN_PROC)
+    check_symbol_exists(KERN_PROCARGS sys/sysctl.h HAVE_KERN_PROC_ARGS_1)
+    if(HAVE_KERN_PROC_ARGS_1)
+      check_symbol_exists(KERN_PROC_PATHNAME sys/sysctl.h HAVE_KERN_PROC_ARGS)
+    endif()
+  endif()
+endif()
+
+if(NOT BACKTRACE_DISABLE_LIB_LZMA)
+  find_library(LIB_LZMA lzma)
+  if(LIB_LZMA)
+    set(HAVE_LIBLZMA 1)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIB_LZMA})
+  endif()
+endif()
+
+if(NOT BACKTRACE_DISABLE_LIB_Z)
+  find_library(LIB_ZLIB z)
+  if(LIB_ZLIB)
+    set(HAVE_ZLIB 1)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIB_ZLIB})
+  endif()
+endif()
+
+if(NOT HAVE_ATOMIC_FUNCTIONS AND HAVE_SYNC_FUNCTIONS)
+  target_sources(${PROJECT_NAME} PRIVATE atomic.c)
+endif()
+
+
+# -------------------------------------------------------------------------------
+# generate config files
+
+# configure_file substitutes "#cmakedefine NAME" with "#define NAME value".
+# Input -> output. Input is rooted in srcdir, output in bindir.
+configure_file(backtrace-supported.h.in  gen/backtrace-supported.h)
+configure_file(config.h.in.cmake  gen/config.h)
+target_include_directories(${PROJECT_NAME} PRIVATE BEFORE
+  ${CMAKE_CURRENT_BINARY_DIR}/gen)
+target_sources(${PROJECT_NAME} PRIVATE
+  ${CMAKE_CURRENT_BINARY_DIR}/gen/backtrace-supported.h
+  ${CMAKE_CURRENT_BINARY_DIR}/gen/config.h
+)

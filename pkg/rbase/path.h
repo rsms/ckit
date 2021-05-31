@@ -36,4 +36,9 @@ Str path_base_append(Str, const char* path);
 // of the path's base, an empty string is returned. I.e. "foo/.dotfile" => ""
 const char* path_ext(const char* path);
 
+// path_cwdrel returns path relative to the current working directory, or path verbatim if
+// path is outside the working directory.
+const char* path_cwdrel(const char* path);
+
+
 ASSUME_NONNULL_END

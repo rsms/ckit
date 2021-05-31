@@ -83,9 +83,23 @@ function(ckit_gen_sources_list target filename_prefix)
 endfunction()
 
 
+# ckit_target_post_dsymutil adds a POST_BUILD command that runs dsymutil on the executable.
+# This is needed on macos to embed complete debug info for stack traces.
+macro(ckit_target_post_dsymutil target)
+  if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    add_custom_command(TARGET ${target} POST_BUILD
+      COMMAND dsymutil ${CMAKE_CURRENT_BINARY_DIR}/${target}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMENT "dsymutil ${target}"
+    )
+  endif()
+endmacro()
+
+
 macro(add_executable target)
   _add_executable(${target} ${ARGN})
   ckit_gen_sources_list(${target} ${target})
+  ckit_target_post_dsymutil(${target})
 endmacro()
 
 
@@ -97,7 +111,11 @@ endmacro()
 
 macro(ckit_set_test target)
   if(R_BUILD_TESTING_THIS_PROJECT)
-    add_custom_target(test COMMAND ${target} DEPENDS ${target} USES_TERMINAL)
+    add_custom_target(test
+      DEPENDS ${target}
+      COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${target}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      USES_TERMINAL)
     ckit_gen_sources_list(${target} test)
   endif()
 endmacro()
@@ -140,6 +158,11 @@ macro(ckit_define_test target)
       target_include_directories(${target}-test PRIVATE ${_include_directories})
     endif()
 
+    get_target_property(_compile_definitions ${target} COMPILE_DEFINITIONS)
+    if (NOT (_compile_definitions STREQUAL "_compile_definitions-NOTFOUND"))
+      target_compile_definitions(${target}-test PRIVATE ${_compile_definitions})
+    endif()
+
     get_target_property(_compile_options ${target} COMPILE_OPTIONS)
     if (NOT (_compile_options STREQUAL "_compile_options-NOTFOUND"))
       target_compile_options(${target}-test PRIVATE ${_compile_options})
@@ -151,6 +174,8 @@ macro(ckit_define_test target)
         target_link_libraries(${target}-test ${_dep})
       endif()
     endforeach()
+
+    target_compile_options(${target}-test PRIVATE -gdwarf)
 
     # if (_main_source_file)
     #   target_sources(${target}-test PRIVATE ${_main_source_file})
@@ -225,12 +250,22 @@ function(_ckit_configure_project)
 
   if ((CMAKE_C_COMPILER_ID MATCHES "Clang") OR (CMAKE_C_COMPILER_ID MATCHES "GNU"))
     add_compile_options(
-      -ffile-prefix-map=${CKIT_DIR}/=$CKIT_DIR/
-      -ffile-prefix-map=../../=./
-      # -ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=${SRC_FILENAME_PREFIX}/
       -fstrict-aliasing
       -fcolor-diagnostics
     )
+    if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
+      # full source filename paths in debug builds
+      add_compile_options(
+        -ffile-prefix-map=../../=${CMAKE_CURRENT_SOURCE_DIR}/
+      )
+    else()
+      # short symbolic source filename paths in release builds
+      add_compile_options(
+        -ffile-prefix-map=${CKIT_DIR}/=<ckit>/
+        -ffile-prefix-map=../../=<${PROJECT_NAME}>/
+        -ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=<${PROJECT_NAME}>/
+      )
+    endif()
   endif()
 
   if (CMAKE_C_COMPILER_ID MATCHES "Clang")
