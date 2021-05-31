@@ -48,6 +48,7 @@ static const char* nostyle = "";
 
 
 void testing_add_test(Testing* t) {
+  t->file = path_cwdrel(t->file);
   if (testlist_head == NULL) {
     testlist_head = t;
   } else {
