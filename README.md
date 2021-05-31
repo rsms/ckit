@@ -45,10 +45,11 @@ export PATH=$PATH:$CKIT_DIR/bin
 mkdir ~/myproject
 cd ~/myproject
 echo "int main() { return 0; }" > hello.c
-ckit init   # creates cmakelists.txt
-ckit build  # produces out/debug/myproject (or .a if there's no main)
-./out/debug/myproject
-ckit test   # builds & runs out/debug-test/myproject-test
+ckit init                # generate cmakelists.txt
+ckit build               # build all targets
+./out/debug/myproject    # run example program
+ckit test                # build & run tests
+ckit watch -r myproject  # build & run as sources change
 ```
 
 
@@ -59,10 +60,11 @@ mkdir ~/myproject
 cd ~/myproject
 git clone https://github.com/rsms/ckit.git
 echo "int main() { return 0; }" > hello.c
-./ckit/bin/ckit init   # creates cmakelists.txt
-./ckit/bin/ckit build  # produces out/debug/myproject (or .a if there's no main)
-./out/debug/myproject
-./ckit/bin/ckit test   # builds & runs out/debug-test/myproject-test
+./ckit/bin/ckit init                # generate cmakelists.txt
+./ckit/bin/ckit build               # build all targets
+./out/debug/myproject               # run example program
+./ckit/bin/ckit test                # build & run tests
+./ckit/bin/ckit watch -r myproject  # build & run as sources change
 ```
 
 Dependencies:
