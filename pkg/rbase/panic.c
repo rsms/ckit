@@ -1,32 +1,5 @@
 #include "rbase.h"
 
-
-
-__attribute__((noinline))
-static void bar() {
-  panic("lolcat");
-}
-
-__attribute__((noinline))
-static void foo() {
-  bar();
-}
-
-R_TEST(boom) {
-  foo();
-}
-
-
-// // writeline calls write(fd, ptr, len); prints a newline unless ptr[len-1]=='\n'
-// // Does not write anything if len==0.
-// void writeline(int fd, const void* ptr, size_t len) {
-//   if (len > 0) {
-//     write(fd, ptr, len);
-//     if (((char*)ptr)[len-1] != '\n')
-//       write(fd, "\n", 1);
-//   }
-// }
-
 void _errlog(const char* fmt, ...) {
   FILE* fp = stderr;
   flockfile(fp);
