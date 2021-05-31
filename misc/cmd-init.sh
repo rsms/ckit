@@ -51,7 +51,10 @@ _init_pkg() {
   touch .$PROG-srcfiles.tmp
   # find twice to make files in srcdir appear first
   find "$srcdir" -type f -depth 1 -name '*.c' | sort -h > .$PROG-srcfiles1.tmp
-  find "$srcdir" -type f -mindepth 2 -maxdepth 4 -name '*.c' | sort -h >> .$PROG-srcfiles1.tmp
+  find "$srcdir" -type f -mindepth 2 -maxdepth 4 -name '*.c' \
+  | sort -h \
+  | grep -v "${CKIT_DIR}" \
+  >> .$PROG-srcfiles1.tmp || true
   local prefix="$pkgabsdir/"
   local found_source_files=false
   local mainfiles=()
