@@ -1,5 +1,18 @@
 #include "rbase.h"
 
+static atomic_i32 _stacktrace_limit = 30;
+static atomic_i32 _stacktrace_limit_src = 5;
+
+void panic_set_stacktrace_limits(int limit, int limit_src) {
+  AtomicStore(&_stacktrace_limit, limit);
+  AtomicStore(&_stacktrace_limit_src, limit_src);
+}
+
+void panic_get_stacktrace_limits(int* limit, int* limit_src) {
+  *limit = AtomicLoad(&_stacktrace_limit);
+  *limit_src = AtomicLoad(&_stacktrace_limit_src);
+}
+
 void _errlog(const char* fmt, ...) {
   FILE* fp = stderr;
   flockfile(fp);
@@ -36,7 +49,11 @@ _Noreturn void _panic(const char* filename, int lineno, const char* fname, const
 
   fprintf(stderr, " in %s at %s:%d\n", fname, filename, lineno);
 
-  os_stacktrace_fwrite(stderr, /* offsetFrames = */ 1);
+  const int offsetFrames = 1;
+  int limit = 0;
+  int limit_src = 0;
+  panic_get_stacktrace_limits(&limit, &limit_src);
+  os_stacktrace_fwrite(stderr, offsetFrames, limit, limit_src);
 
   funlockfile(fp);
   fflush(fp);

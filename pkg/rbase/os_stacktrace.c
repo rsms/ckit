@@ -9,13 +9,15 @@
 typedef struct BacktraceCtx {
   enum { PASS1, PASS2 } pass;
   int   maxFnNameLen;
+  int   limit;
+  int   count;
   const char* exepath;
   FILE* fp;
   bool  stylize;
+  bool  include_source;
   const char* dimstyle;
   const char* boldstyle;
   const char* nostyle;
-  bool include_source;
   int nsources_printed;
 } BacktraceCtx;
 
@@ -57,6 +59,9 @@ static bool fwrite_sourceline(BacktraceCtx* ctx, FILE* fp, int lineno) {
 
 static int _bt_full_cb(void* data, uintptr_t pc, const char* file, int line, const char* fun) {
   BacktraceCtx* ctx = (BacktraceCtx*)data;
+  ctx->count++;
+  if (ctx->limit >= 0 && ctx->count > ctx->limit)
+    return 0;
   if (ctx->pass == PASS1) {
     int len = (int)strlen(fun);
     if (len > ctx->maxFnNameLen)
@@ -71,8 +76,9 @@ static int _bt_full_cb(void* data, uintptr_t pc, const char* file, int line, con
           return 0;
       }
       if (ctx->nsources_printed == 0) {
-        const char* hruler = "--------------------------------------\n";
-        fwrite(hruler, strlen(hruler), 1, ctx->fp);
+        fprintf(ctx->fp,
+          "%s------------------------------------------------------------------------------%s\n",
+          ctx->dimstyle, ctx->nostyle);
       }
     }
     fprintf(ctx->fp, "  %s%-*s%s  %s:%d  %s[pc %p]%s\n",
@@ -90,17 +96,32 @@ static int _bt_full_cb(void* data, uintptr_t pc, const char* file, int line, con
   return 0;
 }
 
+
+static void print_limit_reached(const BacktraceCtx* ctx) {
+  fprintf(ctx->fp, "  %s+%d frames%s\n",
+    ctx->dimstyle, ctx->count - ctx->limit, ctx->nostyle);
+}
+
 #endif /* HAVE_LIBBACKTRACE */
 
 
-
-void os_stacktrace_fwrite(FILE* nonull fp, int offset_frames) {
+void os_stacktrace_fwrite(FILE* nonull fp, int offset_frames, int limit, int limit_src) {
   offset_frames++; // always skip the top frame for this function
+
+  if (limit < 0)
+    limit = -1;
+
+  if (limit_src < 0) {
+    limit_src = -1;
+  } else if (limit_src > limit) {
+    limit_src = limit;
+  }
 
 #ifdef HAVE_LIBBACKTRACE
   BacktraceCtx ctx = {
     .fp = fp,
     .exepath = os_exepath(),
+    .limit = limit,
   };
 
   if (isatty(fileno(fp))) {
@@ -122,18 +143,25 @@ void os_stacktrace_fwrite(FILE* nonull fp, int offset_frames) {
   // Or at least AFAIK from skimming the code.
   //state = backtrace_create_state("/proc/self/exe", 0, _bt_error_cb, &ctx);
 
-  // first pass measures longest function name
+  // first pass measures max function-name length
   if (backtrace_full(state, offset_frames, _bt_full_cb, _bt_error_cb, &ctx) == 0) {
     // second pass actually prints
     ctx.pass = PASS2;
+    ctx.count = 0; // reset counter
     if (backtrace_full(state, offset_frames, _bt_full_cb, _bt_error_cb, &ctx) == 0) {
-      // all callbacks returned 0 -- ok
+      // did we hit the limit?
+      if (ctx.count > ctx.limit)
+        print_limit_reached(&ctx);
+
       // source lines
       ctx.include_source = true;
       ctx.maxFnNameLen = 0;
-      // ctx.pass = PASS2;
+      ctx.count = 0; // reset counter
+      ctx.limit = limit_src; // may be different limit
       backtrace_full(state, offset_frames, _bt_full_cb, _bt_error_cb, &ctx);
       if (ctx.nsources_printed > 1) {
+        if (ctx.count > ctx.limit)
+          print_limit_reached(&ctx);
         fputc('\n', ctx.fp);
       }
       return;
@@ -144,12 +172,14 @@ void os_stacktrace_fwrite(FILE* nonull fp, int offset_frames) {
   // fall back to libc backtrace()
 #endif
 
-  void* buf[64];
+  void* buf[128];
   int framecount = backtrace(buf, countof(buf));
   if (framecount < offset_frames)
     return;
   char** strs = backtrace_symbols(buf, framecount);
   if (strs != NULL) {
+    if (limit > 0 && limit < framecount)
+      framecount = limit;
     for (int i = offset_frames; i < framecount; ++i) {
       fwrite(strs[i], strlen(strs[i]), 1, fp);
       fwrite("\n", 1, 1, fp);

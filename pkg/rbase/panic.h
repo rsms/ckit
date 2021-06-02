@@ -27,8 +27,20 @@ ASSUME_NONNULL_BEGIN
   #endif
 #endif
 
-// panic prints msg (and errno, if non-zero) to stderr and calls exit(2)
+// panic prints msg (and errno, if non-zero) to stderr along with a stack trace and calls abort()
 #define panic(fmt, ...) _panic(__FILE__, __LINE__, __FUNCTION__, fmt, ##__VA_ARGS__)
+
+// panic_get_stacktrace_limits reads the current stack trace limits
+void panic_get_stacktrace_limits(int* limit, int* limit_src);
+
+// panic_set_stacktrace_limits sets new stack trace limits.
+// `limit` limits the total number of stack frames reported while `limit_src` limits the
+// number of source traces printed. If limit_src is capped to the value of limit.
+// A negative limit means "unlimited".
+void panic_set_stacktrace_limits(int limit, int limit_src);
+
+// --------------------------------------------------------------------------------------------
+// implementation
 
 void _errlog(const char* fmt, ...) ATTR_FORMAT(printf, 1, 2);
 
