@@ -116,6 +116,14 @@ void* nullable mem_pagealloc(size_t npages, MemPageFlags flags) {
     if (R_UNLIKELY(ptr == MAP_FAILED))
       return NULL;
 
+    // Pretty much all OSes return zeroed anonymous memory pages.
+    // Do a little sample in debug mode just to be sure.
+    #if defined(DEBUG) && !defined(NDEBUG)
+    const u8 zero[128] = {0};
+    assert_debug(pagesize >= 128);
+    assert_debug(memcmp(ptr, zero, sizeof(zero)) == 0); // or: got random data from mmap!
+    #endif
+
     // if enabled and available, protect the last page from access to cause a crash on
     // out of bounds access.
     #ifdef HAS_MPROTECT
