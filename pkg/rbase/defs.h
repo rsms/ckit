@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -187,12 +188,19 @@ typedef signed long            intptr_t;
 // division of integer, rounding up
 #define r_idiv_ceil(x, y) (1 + (((x) - 1) / (y)))
 
+// portable type formatters
+#define FMT_S64 "%" PRId64  // signed decimal
+#define FMT_U64 "%" PRIu64  // unsigned decimal
+#define FMT_O64 "%" PRIo64  // unsigned octal
+#define FMT_X64 "%" PRIX64  // unsigned uppercase hexadecimal
+#define FMT_x64 "%" PRIx64  // unsigned lowercase hexadecimal
+
 // r_type_formatter yields a printf formatting pattern for the type of x
 #define r_type_formatter(x) _Generic((x), \
-  unsigned long long: "%llu", \
+  unsigned long long: FMT_U64, \
   unsigned long:      "%lu", \
   unsigned int:       "%u", \
-  long long:          "%lld", \
+  long long:          PRId64, \
   long:               "%ld", \
   int:                "%d", \
   char:               "%c", \
