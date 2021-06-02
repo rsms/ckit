@@ -243,8 +243,10 @@ _run_after_build() {
     fi
     echo $_pid > "$RUN_PIDFILE"
     echo "$RUN_ARG0_PRINT [$_pid] started"
-    wait $_pid || true
+    set +e
+    wait $_pid
     _status=$?
+    set -e
     if [ $_status -eq 0 ]; then
       printf "$RUN_ARG0_PRINT [$_pid] \e[1;32mexited $_status\e[0m\n"
     else
