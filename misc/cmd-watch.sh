@@ -7,6 +7,7 @@ options:
   -r, -run    Run target in build directory after successful build.
   -r=<arg>    Run <arg> after successful build.
   -rsh=<cmd>  Run <cmd> in a shell after successful build.
+  -wf=<file>  Extra file or directory to watch for changes.
 $(_help_common_options)
 See \`$PROG build -help\` for rest of arguments accepted.
 
@@ -47,12 +48,14 @@ OPT_BUILD_TYPE=debug  # "debug" | "fast" | "safe"
 OPT_TEST=
 OPT_RUN=false
 OPT_RUN_SHELL=false
+EXTRA_WATCH_FILES=()
 
 while [[ $# -gt 0 ]]; do case "$1" in
   -r|-run|--run) OPT_RUN=true; shift ;;
   -r=*)      RUN_ARGS+=( "${1:3}" ); shift ;;
   -run=*)    RUN_ARGS+=( "${1:5}" ); shift ;;
   -rsh=*)    RUN_ARGS=( "${1:5}" );  OPT_RUN_SHELL=true; shift ;;
+  -wf=*)     EXTRA_WATCH_FILES+=( "${1:4}" ); shift ;;
 
   # options for both build and watch
   -fast|-release) BUILD_ARGS+=( "$1" ); OPT_BUILD_TYPE=fast; shift ;;
@@ -385,6 +388,9 @@ while true; do
 
   WATCH_FILES=( $(sort -u "$WATCH_FILES_FILE") )
   WATCH_FILES+=( "$SRC_DIR/cmakelists.txt" )
+  if [ ${#EXTRA_WATCH_FILES[@]} -gt 0 ]; then
+    WATCH_FILES+=( "${EXTRA_WATCH_FILES[@]}" )
+  fi
 
   if $VERBOSE; then
     echo "watching files:"
