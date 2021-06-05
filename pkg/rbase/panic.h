@@ -10,7 +10,7 @@
 ASSUME_NONNULL_BEGIN
 
 #ifdef DEBUG
-  #define errlog(fmt, ...) _errlog(fmt " (%s:%d)", ##__VA_ARGS__, __FILE__, __LINE__)
+  #define errlog(fmt, ...) _errlog(fmt " (%s:%d)", ##__VA_ARGS__, path_cwdrel(__FILE__), __LINE__)
   #define TODO_IMPL   panic("\e[1;33mTODO_IMPL %s\e[0m\n", __PRETTY_FUNCTION__)
   #ifdef __builtin_unreachable
     #define UNREACHABLE ({ panic("\e[1;31mUNREACHABLE\e[0m"); __builtin_unreachable(); })
