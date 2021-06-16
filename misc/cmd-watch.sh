@@ -67,9 +67,10 @@ while [[ $# -gt 0 ]]; do case "$1" in
   --) shift; break ;;
   -*)
     set +e ; _try_parse_common_option "$@" ; N=$? ; set -e
-    BUILD_ARGS+=("$1") ; shift
     if [ $N -gt 0 ]; then
-      for i in `seq $N`; do shift; done # consume args
+      for i in `seq $N`; do
+        BUILD_ARGS+=("$1") ; shift
+      done
     fi
     ;;
   *) break ;;
@@ -105,9 +106,16 @@ CKIT_PKG_DIR="$CKIT_DIR/pkg"
 
 if [ -n "$OPT_TEST" ]; then
   BUILD_ARGS+=(-T)
-elif [ "$BUILD_TARGET" == "test" ]; then
-  OPT_TEST=y
-  BUILD_CMD=test  # run "ckit test" instead of "ckit build"
+else
+  case "$BUILD_TARGET" in
+    test)
+      OPT_TEST=y
+      BUILD_CMD=test  # run "ckit test" instead of "ckit build"
+      ;;
+    test*)
+      OPT_TEST=y
+      ;;
+  esac
 fi
 
 # BUILD_DIR
@@ -329,7 +337,7 @@ _scan_source_files() {
       find "${BUILD_DIR}" \
         -maxdepth 2 -type f -name '*.ckit-sources.txt' -exec cat '{}' ';' > "$srclist_file"
     else
-      return 1
+      return 0
     fi
   fi
   echo "$srclist_file"
@@ -358,7 +366,7 @@ while true; do
   # scan for source files (populates SOURCES)
   SOURCES=()
   SOURCE_LIST_FILE=$(_scan_source_files)
-  [ -f "$SOURCE_LIST_FILE" ] || _err "No source files found"
+  [ -f "$SOURCE_LIST_FILE" ] || _err "No source files found for target $BUILD_TARGET"
   cp -f "$SOURCE_LIST_FILE" "$WATCH_FILES_FILE"
 
   # scan for source deps
