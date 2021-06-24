@@ -182,7 +182,7 @@ void os_stacktrace_fwrite(FILE* nonull fp, int offset_frames, int limit, int lim
       framecount = limit;
     for (int i = offset_frames; i < framecount; ++i) {
       fwrite(strs[i], strlen(strs[i]), 1, fp);
-      fwrite("\n", 1, 1, fp);
+      fputc('\n', fp);
     }
     free(strs);
     return;
