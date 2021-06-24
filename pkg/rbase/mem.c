@@ -19,10 +19,16 @@ char* memstrdup(Mem mem, const char* pch) {
 }
 
 // ------------------------------------------------------------------------------------
-// MemSyncWrapperInit
+// MemSyncWrapper
+
+typedef struct MSyncWrapper {
+  MemAllocator ma;
+  mtx_t        mu;
+  Mem          m;
+} MSyncWrapper;
 
 static void* nullable _mem_syncw_alloc(Mem m, size_t size) {
-  MemSyncWrapper* w = (MemSyncWrapper*)m;
+  MSyncWrapper* w = (MSyncWrapper*)m;
   mtx_lock(&w->mu);
   void* p = m->alloc(w->m, size);
   mtx_unlock(&w->mu);
@@ -30,7 +36,7 @@ static void* nullable _mem_syncw_alloc(Mem m, size_t size) {
 }
 
 static void* nullable _mem_syncw_realloc(Mem m, void* ptr, size_t newsize) {
-  MemSyncWrapper* w = (MemSyncWrapper*)m;
+  MSyncWrapper* w = (MSyncWrapper*)m;
   mtx_lock(&w->mu);
   void* p = m->realloc(w->m, ptr, newsize);
   mtx_unlock(&w->mu);
@@ -38,17 +44,25 @@ static void* nullable _mem_syncw_realloc(Mem m, void* ptr, size_t newsize) {
 }
 
 static void _mem_syncw_free(Mem m, void* ptr) {
-  MemSyncWrapper* w = (MemSyncWrapper*)m;
+  MSyncWrapper* w = (MSyncWrapper*)m;
   mtx_lock(&w->mu);
   m->free(w->m, ptr);
   mtx_unlock(&w->mu);
 }
 
-Mem MemSyncWrapperInit(MemSyncWrapper* w, Mem m) {
+Mem MemSyncWrapper(Mem inner) {
+  auto w = memalloct(inner, MSyncWrapper);
   w->ma.alloc   = _mem_syncw_alloc;
   w->ma.realloc = _mem_syncw_realloc;
   w->ma.free    = _mem_syncw_free;
   mtx_init(&w->mu, mtx_plain);
-  w->m = m;
-  return (Mem)&w->ma;
+  w->m = inner;
+  return (Mem)w;
+}
+
+Mem MemSyncWrapperFree(Mem m) {
+  auto w = (MSyncWrapper*)m;
+  Mem inner = w->m;
+  memfree(inner, w);
+  return inner;
 }

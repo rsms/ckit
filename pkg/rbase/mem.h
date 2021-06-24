@@ -87,17 +87,11 @@ void MemLinearFree(Mem m);
 
 // ---------------------------------
 
-// MemSyncWrapper is an allocator wrapper that uses a mtx_t to ensure mutually exclusive access
-// to the alloc, realloc and free functions of the provided allocator m.
-typedef struct MemSyncWrapper {
-  MemAllocator ma;
-  mtx_t        mu;
-  Mem          m;
-} MemSyncWrapper;
-
-// MemSyncWrapperInit initializes w to synchronize multi-thread access to memory m.
-// Returns the new "wrapping" allocator handle.
-Mem MemSyncWrapperInit(MemSyncWrapper* w, Mem m);
+// MemSyncWrapper creates an allocator which wraps another allocator and
+// uses a mtx_t to ensure mutually exclusive access to the alloc, realloc
+// and free functions of the provided allocator m.
+Mem MemSyncWrapper(Mem inner);
+Mem MemSyncWrapperFree(Mem m); // returns the "unwrapped" inner allocator
 
 // ---------------------------------
 
