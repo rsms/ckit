@@ -119,8 +119,10 @@ typedef signed long            intptr_t;
 //   However, there are applications in which this data is hard to collect.
 #ifdef __builtin_expect
   #define R_UNLIKELY(x) __builtin_expect((x), 0)
+  #define R_LIKELY(x)   __builtin_expect((x), 1)
 #else
   #define R_UNLIKELY(x) (x)
+  #define R_LIKELY(x)   (x)
 #endif
 
 // ATTR_FORMAT(archetype, string-index, first-to-check)
