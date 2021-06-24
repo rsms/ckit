@@ -40,15 +40,19 @@ _Noreturn void _panic(const char* filename, int lineno, const char* fname, const
   FILE* fp = stderr;
   flockfile(fp);
 
+  // panic: {message} in {function} at {source_location}
   fprintf(stderr, "\npanic: ");
-
   va_list ap;
   va_start(ap, fmt);
   vfprintf(stderr, fmt, ap);
   va_end(ap);
-
   fprintf(stderr, " in %s at %s:%d\n", fname, filename, lineno);
 
+  // errno: [{code}] {message}
+  if (errno != 0)
+    fprintf(stderr, "errno: [%d] %s\n", errno, strerror(errno));
+
+  // stack trace
   const int offsetFrames = 1;
   int limit = 0;
   int limit_src = 0;
@@ -57,6 +61,8 @@ _Noreturn void _panic(const char* filename, int lineno, const char* fname, const
 
   funlockfile(fp);
   fflush(fp);
+
+  fsync(STDERR_FILENO);
 
   // exit(2);
   abort();
