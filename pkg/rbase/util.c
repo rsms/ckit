@@ -1,18 +1,7 @@
 #include "rbase.h"
-#include <pwd.h> // getpwuid
 
 ASSUME_NONNULL_BEGIN
 
-static size_t _mempagesize = 0;
-
-size_t mempagesize() {
-  if (_mempagesize == 0) {
-    _mempagesize = (size_t)sysconf(_SC_PAGESIZE);
-    if (_mempagesize <= 0)
-      _mempagesize = 1024 * 4;
-  }
-  return _mempagesize;
-}
 
 void fmthex(char* out, const u8* indata, int len) {
   const char* hex = "0123456789abcdef";
@@ -24,15 +13,8 @@ void fmthex(char* out, const u8* indata, int len) {
   }
 }
 
-const char* user_home_dir() {
-  struct passwd* pw = getpwuid(getuid());
-  if (pw && pw->pw_dir)
-    return pw->pw_dir;
-  auto home = getenv("HOME");
-  if (home)
-    return home;
-  return "";
-}
+// DEPRECATED
+const char* user_home_dir() { return os_user_home_dir(); }
 
 
 ASSUME_NONNULL_END

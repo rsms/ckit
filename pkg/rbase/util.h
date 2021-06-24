@@ -1,13 +1,6 @@
 #pragma once
 ASSUME_NONNULL_BEGIN
 
-// os_mempagesize returns the memory page size
-size_t os_mempagesize();
-
-// sys_ncpu returns the number of hardware threads.
-// Returns 0 when the number of CPUs could not be determined.
-u32 sys_ncpu();
-
 // fmthex writes len*2 bytes to out, encoding indata in hexadecimal form
 void fmthex(char* out, const u8* indata, int len);
 
@@ -15,6 +8,7 @@ void fmthex(char* out, const u8* indata, int len);
 int fmtduration(char* buf, int bufsize, u64 timeduration);
 
 // get the current user's home directory. Returns "" on failure.
+// DEPRECATED use os_user_home_dir()
 const char* user_home_dir();
 
 // int popcount<T>(T v)
