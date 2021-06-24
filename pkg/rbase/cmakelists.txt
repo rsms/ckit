@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.12)
 project(rbase  VERSION 0.1.0  LANGUAGES C)
 
-include(../../ckit.cmake)
+include($ENV{CKIT_DIR}/ckit.cmake)
 ckit_configure_project(C)
 
 add_library(rbase
+  chan.c
+  chan_test.c
   debug.c
   fs.c
   hash.c
@@ -12,16 +14,20 @@ add_library(rbase
   mem_arena.c
   mem_linear.c
   mem_page.c
+  os.c
+  os_cacheline_size.c
   os_exepath.c
   os_getcwd.c
+  os_ncpu.c
   os_stacktrace.c
   panic.c
   parseint.c
   path.c
   str.c
-  sys_ncpu.c
   testing.c
   thread.c
+  thread_sema.c
+  thread_spinmutex.c
   time.c
   unicode.c
   util.c
@@ -46,7 +52,19 @@ if(BACKTRACE_SUPPORTED)
 endif()
 
 
-ckit_define_test(rbase)
-
 # precompile the main header to speed up uses in other projects
 target_precompile_headers(rbase PUBLIC rbase.h)
+
+
+# unit tests
+# ckit_define_test(rbase)
+add_executable(test_rbase testing.c)
+target_compile_definitions(test_rbase PRIVATE R_TESTING_ENABLED=1 R_TESTING_MAIN_IMPL=1)
+target_link_libraries(test_rbase PRIVATE rbase)
+ckit_force_load_lib(test_rbase rbase)
+ckit_add_test(test-rbase test_rbase)
+
+
+# benchmarks
+add_executable(chan_bench chan_bench.c)
+target_link_libraries(chan_bench PRIVATE rbase)
