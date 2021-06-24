@@ -36,17 +36,23 @@
   typedef _Atomic(ssize_t) atomic_ssize;
 #endif
 
-#define AtomicLoad(x)        atomic_load_explicit((x), r_memory_order(relaxed))
-#define AtomicLoadAcq(x)     atomic_load_explicit((x), r_memory_order(acquire))
-#define AtomicStore(x, v)    atomic_store_explicit((x), (v), r_memory_order(relaxed))
-#define AtomicStoreRel(x, v) atomic_store_explicit((x), (v), r_memory_order(release))
+#define AtomicLoadx(x, mo)     atomic_load_explicit((x), (mo))
+#define AtomicLoad(x)          atomic_load_explicit((x), r_memory_order(relaxed))
+#define AtomicLoadAcq(x)       atomic_load_explicit((x), r_memory_order(acquire))
+#define AtomicStorex(x, v, mo) atomic_store_explicit((x), (v), (mo))
+#define AtomicStore(x, v)      atomic_store_explicit((x), (v), r_memory_order(relaxed))
+#define AtomicStoreRel(x, v)   atomic_store_explicit((x), (v), r_memory_order(release))
 
-// note: these operations return the old value
+// note: these operations return the previous value; _before_ applying the operation
 #define AtomicAdd(x, n)      atomic_fetch_add_explicit((x), (n), r_memory_order(relaxed))
+#define AtomicAddx(x, n, mo) atomic_fetch_add_explicit((x), (n), (mo))
 #define AtomicSub(x, n)      atomic_fetch_sub_explicit((x), (n), r_memory_order(relaxed))
 #define AtomicOr(x, n)       atomic_fetch_or_explicit((x), (n), r_memory_order(relaxed))
 #define AtomicAnd(x, n)      atomic_fetch_and_explicit((x), (n), r_memory_order(relaxed))
 #define AtomicXor(x, n)      atomic_fetch_xor_explicit((x), (n), r_memory_order(relaxed))
+
+#define AtomicCASx(p, oldval, newval, mosuccess, mofail) \
+  atomic_compare_exchange_strong_explicit((p), (oldval), (newval), (mosuccess), (mofail))
 
 #define AtomicCAS(p, oldval, newval) \
   atomic_compare_exchange_strong_explicit( \
@@ -54,11 +60,11 @@
 
 #define AtomicCASRel(p, oldval, newval) \
   atomic_compare_exchange_strong_explicit( \
-    (p), (oldval), (newval), r_memory_order(release), r_memory_order(consume))
+    (p), (oldval), (newval), r_memory_order(release), r_memory_order(relaxed))
 
 #define AtomicCASAcqRel(p, oldval, newval) \
   atomic_compare_exchange_strong_explicit( \
-    (p), (oldval), (newval), r_memory_order(acq_rel), r_memory_order(consume))
+    (p), (oldval), (newval), r_memory_order(acq_rel), r_memory_order(relaxed))
 
 // // r_atomic_once(flag, statement):
 // //   static r_atomic_once_flag once;
