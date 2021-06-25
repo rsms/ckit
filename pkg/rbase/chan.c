@@ -29,7 +29,7 @@
 // TODO: set value depending on target preprocessor information.
 #define LINE_CACHE_SIZE 64
 
-//#define ATTR_ALIGNED_LINE_CACHE __attribute__((aligned(LINE_CACHE_SIZE)))
+#define ATTR_ALIGNED_LINE_CACHE __attribute__((aligned(LINE_CACHE_SIZE)))
 
 
 ASSUME_NONNULL_BEGIN
@@ -169,12 +169,13 @@ ASSUME_NONNULL_BEGIN
 typedef struct Thr Thr;
 typedef uintptr_t Msg;
 
+// Thr holds thread-specific data and is owned by thread-local storage
 struct Thr {
-  Thr*          next;    // list link
   size_t        id;
-  LSema         sema;
   bool          init;
   atomic_bool   closed;
+  LSema         sema;
+  Thr*          next ATTR_ALIGNED_LINE_CACHE; // list link
   _Atomic(Msg*) msgptr;
 };
 
@@ -184,21 +185,36 @@ typedef struct WaitQ {
 } WaitQ;
 
 typedef struct Chan {
+  // These fields don't change after ChanOpen
   uintptr_t   memptr; // memory allocation pointer
   Mem         mem;    // memory allocator this belongs to (immutable)
   u32         qcap;   // size of the circular queue buf (immutable)
+
+  // These fields are frequently accessed and stored to.
+  // There's a perf opportunity here with a different, more cache efficient layout.
   atomic_u32  qlen;   // number of messages currently queued in buf
   atomic_u32  closed; // 1 when closed
-  CHAN_LOCK_T lock;
+  CHAN_LOCK_T lock;   // guards the Chan struct
 
+  // sendq is accessed on every call to chan_recv and only in some cases by chan_send,
+  // when parking a thread when there's no waiting receiver nor queued message.
+  // recvq is accessed on every call to chan_send and like sendq, only when parking a thread
+  // in chan_recv.
   WaitQ sendq; // list of waiting send callers
   WaitQ recvq; // list of waiting recv callers
 
+  // sendx & recvx are likely to be falsely shared between threads.
+  // - sendx is loaded & stored by both chan_send and chan_recv
+  //   - chan_send for buffered channels when no receiver is waiting
+  //   - chan_recv when there's a waiting sender
+  // - recvx is only used by chan_recv
+  // So we make sure recvx ends up on a separate cache line.
   atomic_u32 sendx; // send index in buf
-  atomic_u32 recvx; // receive index in buf
+  atomic_u32 recvx ATTR_ALIGNED_LINE_CACHE; // receive index in buf
 
+  // u8 pad[LINE_CACHE_SIZE];
   Msg buf[]; // queue storage
-} Chan;
+} ATTR_ALIGNED_LINE_CACHE Chan;
 
 
 static void thr_init(Thr* t) {
