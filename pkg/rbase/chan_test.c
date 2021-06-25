@@ -12,11 +12,14 @@ ASSUME_NONNULL_BEGIN
 #endif
 
 
-static u64 init_test_messages(uintptr_t* messages, u32 nmessages) {
+typedef u32 Msg;
+
+
+static u64 init_test_messages(Msg* messages, u32 nmessages) {
   // init messages (1 2 3 ...)
   u64 messages_sum = 0; // sum of all messages
   for (u32 i = 0; i < nmessages; i++) {
-    uintptr_t msg = (uintptr_t)i + 1; // make it 1-based for simplicity
+    Msg msg = (Msg)i + 1; // make it 1-based for simplicity
     messages[i] = msg;
     messages_sum += (u64)msg;
   }
@@ -26,19 +29,19 @@ static u64 init_test_messages(uintptr_t* messages, u32 nmessages) {
 
 R_TEST(chan_st) {
   Mem mem = MemLibC();
-  uintptr_t messages[10]; // must be an even number
+  Msg messages[10]; // must be an even number
   u64 send_messages_sum = init_test_messages(messages, countof(messages));
   u64 recv_messages_sum = 0; // sum of all messages received
 
   size_t N = 2;
-  Chan* ch = ChanOpen(mem, /*bufsize*/N);
+  Chan* ch = ChanOpen(mem, sizeof(Msg), /*bufsize*/N);
 
   for (size_t i = 0; i < countof(messages); i += N) {
     for (size_t j = 0; j < N; j++) {
-      ChanSend(ch, messages[i + j]);
+      ChanSend(ch, &messages[i + j]);
     }
     for (size_t j = 0; j < N; j++) {
-      uintptr_t msg_out;
+      Msg msg_out;
       assert(ChanRecv(ch, &msg_out));
       asserteq(messages[i + j], msg_out);
       recv_messages_sum += (u64)msg_out;
@@ -62,17 +65,17 @@ typedef struct TestThread {
   LSema* sema; // semaphore for signalling completion
 
   // messages received or to be sent
-  u32        msgcap; // capacity of msgv
-  u32        msglen; // messages in msgv
-  uintptr_t* msgv;   // messages
+  u32  msgcap; // capacity of msgv
+  u32  msglen; // messages in msgv
+  Msg* msgv;   // messages
 } TestThread;
 
 
 static int send_thread(void* tptr) {
   auto t = (TestThread*)tptr;
   for (u32 i = 0; i < t->msglen; i++) {
-    uintptr_t msg = t->msgv[i];
-    bool ok = ChanSend(t->ch, msg);
+    Msg msg = t->msgv[i];
+    bool ok = ChanSend(t->ch, &msg);
     assertf(ok, "[send_thread#%u] channel closed during send", t->id);
   }
   //dlog("[send_thread#%u] exit", t->id);
@@ -85,7 +88,7 @@ static int recv_thread(void* tptr) {
   t->msglen = 0;
   while (1) {
     // receive a message
-    uintptr_t msg;
+    Msg msg;
     if (!ChanRecv(t->ch, &msg)) {
       break; // channel closed
     }
@@ -132,19 +135,19 @@ static void chan_1send_Nrecv(u32 bufcap, u32 n_send_threads, u32 n_recv_threads,
   // receiver thread is given send_message_count message slots for reception
   // as in theory one thread may receive all messages.
   size_t message_storage_count = send_message_count * (n_recv_threads + 1);
-  uintptr_t* message_storage = memalloc(mem, message_storage_count * sizeof(uintptr_t));
-  uintptr_t* send_messages = &message_storage[0];
+  Msg* message_storage = memalloc(mem, message_storage_count * sizeof(Msg));
+  Msg* send_messages = &message_storage[0];
 
   LSema sema;
   LSemaInit(&sema, 0);
 
-  Chan* ch = ChanOpen(mem, /*cap*/bufcap);
+  Chan* ch = ChanOpen(mem, sizeof(Msg), /*cap*/bufcap);
   dlog("channel capacity: %u, send_message_count: %zu", ChanCap(ch), send_message_count);
 
   // init messages (1 2 3 ...)
   u64 send_message_sum = 0; // sum of all messages
   for (u32 i = 0; i < send_message_count; i++) {
-    uintptr_t msg = (uintptr_t)i + 1; // make it 1-based for simplicity
+    Msg msg = (Msg)i + 1; // make it 1-based for simplicity
     send_messages[i] = msg;
     send_message_sum += (u64)msg;
   }

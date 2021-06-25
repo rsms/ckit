@@ -19,7 +19,7 @@ int main(int argc, const char** argv) {
 }
 
 // Msg is the test message type
-typedef uintptr_t Msg;
+typedef u32 Msg;
 
 
 static u64 init_test_messages(Msg* messages, u32 nmessages) {
@@ -62,13 +62,13 @@ R_BENCHMARK(st1, st1_onbegin)(Benchmark* b) {
   #endif
     init_test_messages(messages, messages_count);
 
-  Chan* ch = ChanOpen(mem, st1_bufsize);
+  Chan* ch = ChanOpen(mem, sizeof(Msg), st1_bufsize);
 
   auto timer = TimerStart();
 
   for (u32 i = 0; i < messages_count; i += st1_bufsize) {
     for (u32 j = 0; j < st1_bufsize; j++) {
-      ChanSend(ch, messages[i + j]);
+      ChanSend(ch, &messages[i + j]);
     }
     for (u32 j = 0; j < st1_bufsize; j++) {
       Msg msg_out;
@@ -106,8 +106,8 @@ typedef struct TestThread {
   Timer  timer;
 
   // messages to be sent (fields used by send_thread)
-  u32        send_msglen; // messages in msgv
-  uintptr_t* send_msgv;   // messages
+  u32  send_msglen; // messages in msgv
+  Msg* send_msgv;   // messages
 
   // received messages (fields used by recv_thread)
   u32 recv_msgc; // number of messages received
@@ -121,7 +121,7 @@ static int send_thread(void* tptr) {
   t->timer = TimerStart();
   for (u32 i = 0; i < t->send_msglen; i++) {
     TimerCycleSampleStart(&t->timer);
-    UNUSED bool ok = ChanSend(t->ch, msgv[i]);
+    UNUSED bool ok = ChanSend(t->ch, &msgv[i]);
     TimerCycleSampleStop(&t->timer);
     assert(ok);
   }
@@ -218,7 +218,7 @@ static Timer mt1_sampler(Benchmark* b) {
   TestThread* recv_threads = memalloc(mem, conf.n_recv_threads * sizeof(TestThread));
   Msg* messages = memalloc(mem, messages_count * sizeof(Msg));
 
-  Chan* ch = ChanOpen(mem, /*bufsize*/conf.bufsize);
+  Chan* ch = ChanOpen(mem, sizeof(Msg), conf.bufsize);
 
   // init messages (1 2 3 ...)
   u64 send_sum = 0; // sum of all messages

@@ -15,6 +15,12 @@
 // - github.com/apple/swift-corelibs-libdispatch/blob/a181700dbf6aee3082a1c6074b3aab97560b5ef8/
 //   src/queue.c
 //
+// Run chan tests:
+//   ckit test chan
+//
+// Run chan benchmarks:
+//   ckit watch -fast -r chan_bench
+//
 
 // DEBUG_CHAN_LOG: define to enable debug logging of send and recv
 //#define DEBUG_CHAN_LOG
@@ -167,16 +173,15 @@ ASSUME_NONNULL_BEGIN
 // -------------------------------------------------------------------------
 
 typedef struct Thr Thr;
-typedef uintptr_t Msg;
 
 // Thr holds thread-specific data and is owned by thread-local storage
 struct Thr {
-  size_t        id;
-  bool          init;
-  atomic_bool   closed;
-  LSema         sema;
-  Thr*          next ATTR_ALIGNED_LINE_CACHE; // list link
-  _Atomic(Msg*) msgptr;
+  size_t         id;
+  bool           init;
+  atomic_bool    closed;
+  LSema          sema;
+  Thr*           next ATTR_ALIGNED_LINE_CACHE; // list link
+  _Atomic(void*) elemptr;
 };
 
 typedef struct WaitQ {
@@ -186,9 +191,10 @@ typedef struct WaitQ {
 
 typedef struct Chan {
   // These fields don't change after ChanOpen
-  uintptr_t   memptr; // memory allocation pointer
-  Mem         mem;    // memory allocator this belongs to (immutable)
-  u32         qcap;   // size of the circular queue buf (immutable)
+  uintptr_t memptr;   // memory allocation pointer
+  Mem       mem;      // memory allocator this belongs to (immutable)
+  size_t    elemsize; // size in bytes of elements sent on the channel
+  u32       qcap;     // size of the circular queue buf (immutable)
 
   // These fields are frequently accessed and stored to.
   // There's a perf opportunity here with a different more cache-efficient layout.
@@ -213,7 +219,7 @@ typedef struct Chan {
   atomic_u32 recvx ATTR_ALIGNED_LINE_CACHE; // receive index in buf
 
   // u8 pad[LINE_CACHE_SIZE];
-  Msg buf[]; // queue storage
+  u8 buf[]; // queue storage
 } ATTR_ALIGNED_LINE_CACHE Chan;
 
 
@@ -271,12 +277,18 @@ inline static Thr* nullable wq_dequeue(WaitQ* wq) {
 }
 
 
-// chan_park adds msgptr to wait queue wq, unlocks channel c and blocks the calling thread
-static Thr* chan_park(Chan* c, WaitQ* wq, Msg* msgptr) {
+// chan_bufptr returns the pointer to the i'th slot in the buffer
+inline static void* chan_bufptr(Chan* c, u32 i) {
+  return (void*)&c->buf[(uintptr_t)i * (uintptr_t)c->elemsize];
+}
+
+
+// chan_park adds elemptr to wait queue wq, unlocks channel c and blocks the calling thread
+static Thr* chan_park(Chan* c, WaitQ* wq, void* elemptr) {
   // caller must hold lock on channel that owns wq
   auto t = thr_current();
-  AtomicStore(&t->msgptr, msgptr);
-  dlog_chan("park: msgptr %p", msgptr);
+  AtomicStore(&t->elemptr, elemptr);
+  dlog_chan("park: elemptr %p", elemptr);
   wq_enqueue(wq, t);
   chan_unlock(&c->lock);
   thr_wait(t);
@@ -293,20 +305,20 @@ inline static bool chan_full(Chan* c) {
 }
 
 
-static bool chan_send_direct(Chan* c, Msg msg, Thr* recvt) {
+static bool chan_send_direct(Chan* c, void* srcelemptr, Thr* recvt) {
   // chan_send_direct processes a send operation on an empty channel c.
-  // msg sent by the sender is copied to the receiver recvt.
+  // element sent by the sender is copied to the receiver recvt.
   // The receiver is then woken up to go on its merry way.
   // Channel c must be empty and locked. This function unlocks c with chan_unlock.
   // recvt must already be dequeued from c.
 
-  // *recvt->msgptr = msg
-  // recvt->msgptr = NULL
-  Msg* msgptr = AtomicLoadAcq(&recvt->msgptr);
-  assertnotnull(msgptr);
-  dlog_send("direct send of msg %zu to [%zu] (msgptr %p)", (size_t)msg, recvt->id, msgptr);
-  *msgptr = msg; // store to address provided with chan_recv call
-  AtomicStore(&recvt->msgptr, NULL);
+  void* dstelemptr = AtomicLoadAcq(&recvt->elemptr);
+  assertnotnull(dstelemptr);
+  dlog_send("direct send of srcelemptr %p to [%zu] (dstelemptr %p)",
+    srcelemptr, recvt->id, dstelemptr);
+  // store to address provided with chan_recv call
+  memcpy(dstelemptr, srcelemptr, c->elemsize);
+  AtomicStore(&recvt->elemptr, NULL); // clear pointer (TODO: is this really needed?)
 
   chan_unlock(&c->lock);
   thr_signal(recvt); // wake up chan_recv caller
@@ -314,9 +326,9 @@ static bool chan_send_direct(Chan* c, Msg msg, Thr* recvt) {
 }
 
 
-inline static bool chan_send(Chan* c, Msg msg, bool* nullable closed) {
+inline static bool chan_send(Chan* c, void* srcelemptr, bool* nullable closed) {
   bool block = closed == NULL;
-  dlog_send("msg %zu", (size_t)msg);
+  dlog_send("srcelemptr %p", srcelemptr);
 
   // fast path for non-blocking send on full channel
   //
@@ -357,14 +369,16 @@ inline static bool chan_send(Chan* c, Msg msg, bool* nullable closed) {
     // bypassing the channel buffer (if any).
     // Note that chan_send_direct calls chan_unlock(&c->lock).
     assert(recvt->init);
-    return chan_send_direct(c, msg, recvt);
+    return chan_send_direct(c, srcelemptr, recvt);
   }
 
   if (AtomicLoad(&c->qlen) < c->qcap) {
     // space available in message buffer -- enqueue
     u32 i = AtomicAdd(&c->sendx, 1);
-    c->buf[i] = msg;
-    dlog_send("enqueue msg %zu at buf[%u]", (size_t)msg, i);
+    // copy *srcelemptr -> *dstelemptr
+    void* dstelemptr = chan_bufptr(c, i);
+    memcpy(dstelemptr, srcelemptr, c->elemsize);
+    dlog_send("enqueue elemptr %p at buf[%u]", srcelemptr, i);
     if (i == c->qcap - 1)
       AtomicStore(&c->sendx, 0);
     AtomicAdd(&c->qlen, 1);
@@ -380,9 +394,9 @@ inline static bool chan_send(Chan* c, Msg msg, bool* nullable closed) {
 
   // park the calling thread. Some recv caller will wake us up.
   // Note that chan_park calls chan_unlock(&c->lock)
-  dlog_send("wait... (msgptr %p)", &msg);
-  chan_park(c, &c->sendq, &msg);
-  dlog_send("woke up -- sent message %zu", (size_t)msg);
+  dlog_send("wait... (elemptr %p)", srcelemptr);
+  chan_park(c, &c->sendq, srcelemptr);
+  dlog_send("woke up -- sent elemptr %p", srcelemptr);
   return true;
 }
 
@@ -397,12 +411,12 @@ inline static bool chan_empty(Chan* c) {
 }
 
 
-static bool chan_recv_direct(Chan* c, Msg* dstmsgptr, Thr* st);
+static bool chan_recv_direct(Chan* c, void* dstelemptr, Thr* st);
 
 
-inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
+inline static bool chan_recv(Chan* c, void* dstelemptr, bool* nullable closed) {
   bool block = closed == NULL; // TODO: non-blocking path
-  dlog_recv("msgptr %p", msgptr);
+  dlog_recv("dstelemptr %p", dstelemptr);
 
   // Fast path: check for failed non-blocking operation without acquiring the lock.
   if (!block && chan_empty(c)) {
@@ -427,7 +441,7 @@ inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
     // Sequential consistency is also required here, when racing with such a send.
     if (chan_empty(c)) {
       // The channel is irreversibly closed and empty
-      *msgptr = 0;
+      memset(dstelemptr, 0, c->elemsize);
       *closed = true;
       return false;
     }
@@ -439,7 +453,7 @@ inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
     // channel is closed and the buffer queue is empty
     dlog_recv("channel closed & empty queue");
     chan_unlock(&c->lock);
-    *msgptr = 0; // avoid undefined behavior
+    memset(dstelemptr, 0, c->elemsize);
     if (closed)
       *closed = true;
     return false;
@@ -453,7 +467,7 @@ inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
     // (both map to the same buffer slot because the queue is full).
     // Note that chan_recv_direct calls chan_unlock(&c->lock).
     assert(t->init);
-    return chan_recv_direct(c, msgptr, t);
+    return chan_recv_direct(c, dstelemptr, t);
   }
 
   if (AtomicLoad(&c->qlen) > 0) {
@@ -463,13 +477,14 @@ inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
       AtomicStore(&c->recvx, 0);
     AtomicSub(&c->qlen, 1);
 
-    *msgptr = c->buf[i];
+    // copy *srcelemptr -> *dstelemptr
+    void* srcelemptr = chan_bufptr(c, i);
+    memcpy(dstelemptr, srcelemptr, c->elemsize);
     #ifdef DEBUG
-    c->buf[i] = 0;
+    memset(srcelemptr, 0, c->elemsize); // zero buffer memory
     #endif
 
-    dlog_recv("dequeue msg %zu from buf[%u]", (size_t)*msgptr, i);
-    assert(*msgptr > 0);
+    dlog_recv("dequeue elemptr %p from buf[%u]", srcelemptr, i);
 
     chan_unlock(&c->lock);
     return true;
@@ -489,8 +504,8 @@ inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
 
   // Block by parking the thread. Some send caller will wake us up.
   // Note that chan_park calls chan_unlock(&c->lock)
-  dlog_recv("wait... (msgptr %p)", msgptr);
-  t = chan_park(c, &c->recvq, msgptr);
+  dlog_recv("wait... (elemptr %p)", dstelemptr);
+  t = chan_park(c, &c->recvq, dstelemptr);
 
   // woken up by sender or close call
   if (AtomicLoad(&t->closed)) {
@@ -500,19 +515,19 @@ inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
     goto ret_closed;
   }
 
-  // message was delivered by storing to msgptr by some sender
-  dlog_recv("woke up -- received message %zu", (size_t)*msgptr);
+  // message was delivered by storing to elemptr by some sender
+  dlog_recv("woke up -- received to elemptr %p", dstelemptr);
   return true;
 
 ret_closed:
   dlog_recv("channel closed");
-  *msgptr = 0; // avoid undefined behavior
+  memset(dstelemptr, 0, c->elemsize);
   return false;
 }
 
 
 // chan_recv_direct processes a receive operation on a full channel c
-static bool chan_recv_direct(Chan* c, Msg* dstmsgptr, Thr* sendert) {
+static bool chan_recv_direct(Chan* c, void* dstelemptr, Thr* sendert) {
   // There are 2 parts:
   // 1) The value sent by the sender sg is put into the channel and the sender
   //    is woken up to go on its merry way.
@@ -526,17 +541,16 @@ static bool chan_recv_direct(Chan* c, Msg* dstmsgptr, Thr* sendert) {
 
   if (AtomicLoad(&c->qlen) == 0) {
     // Copy data from sender
-    dlog_recv("direct recv of msg %zu from [%zu] (msgptr %p, buffer empty)",
-      (size_t)*sendert->msgptr, sendert->id, sendert->msgptr);
-    Msg* srcmsgptr = AtomicLoadx(&sendert->msgptr, memory_order_consume);
-    assertnotnull(srcmsgptr);
-    *dstmsgptr = *srcmsgptr;
+    void* srcelemptr = AtomicLoadx(&sendert->elemptr, memory_order_consume);
+    dlog_recv("direct recv of srcelemptr %p from [%zu] (dstelemptr %p, buffer empty)",
+      srcelemptr, sendert->id, dstelemptr);
+    assertnotnull(srcelemptr);
+    memcpy(dstelemptr, srcelemptr, c->elemsize);
   } else {
     // Queue is full. Take the item at the head of the queue.
     // Make the sender enqueue its item at the tail of the queue.
     // Since the queue is full, those are both the same slot.
-    dlog_recv("direct recv of msg %zu from [%zu] (msgptr %p, buffer full)",
-      (size_t)*sendert->msgptr, sendert->id, sendert->msgptr);
+    dlog_recv("direct recv from [%zu] (dstelemptr %p, buffer full)", sendert->id, dstelemptr);
     //assert_debug(AtomicLoad(&c->qlen) == c->qcap); // queue is full
 
     // copy msg from queue to receiver
@@ -548,15 +562,17 @@ static bool chan_recv_direct(Chan* c, Msg* dstmsgptr, Thr* sendert) {
       AtomicStore(&c->sendx, i + 1);
     }
 
-    *dstmsgptr = c->buf[i];
-    dlog_recv("dequeue msg %zu from buf[%u]", (size_t)c->buf[i], i);
-    assert(c->buf[i] > 0);
+    // copy c->buf[i] -> *dstelemptr
+    void* bufelemptr = chan_bufptr(c, i);
+    assertnotnull(bufelemptr);
+    memcpy(dstelemptr, bufelemptr, c->elemsize);
+    dlog_recv("dequeue srcelemptr %p from buf[%u]", bufelemptr, i);
 
-    // copy msg from sender to queue
-    Msg* srcmsgptr = AtomicLoadx(&sendert->msgptr, memory_order_consume);
-    assertnotnull(srcmsgptr);
-    dlog_recv("enqueue msg %zu at buf[%u]", (size_t)*srcmsgptr, i);
-    c->buf[i] = *srcmsgptr;
+    // copy *sendert->elemptr -> c->buf[i]
+    void* srcelemptr = AtomicLoadx(&sendert->elemptr, memory_order_consume);
+    assertnotnull(srcelemptr);
+    memcpy(bufelemptr, srcelemptr, c->elemsize);
+    dlog_recv("enqueue srcelemptr %p to buf[%u]", srcelemptr, i);
   }
 
   chan_unlock(&c->lock);
@@ -565,13 +581,13 @@ static bool chan_recv_direct(Chan* c, Msg* dstmsgptr, Thr* sendert) {
 }
 
 
-Chan* nullable ChanOpen(Mem mem, u32 cap) {
-  i64 memsize = (i64)sizeof(Chan) + ((i64)cap * (i64)sizeof(Msg));
+Chan* nullable ChanOpen(Mem mem, size_t elemsize, u32 bufcap) {
+  i64 memsize = (i64)sizeof(Chan) + ((i64)bufcap * (i64)elemsize);
 
   // ensure we have enough space to offset the allocation by line cache (for alignment)
   memsize = align2(memsize + ((LINE_CACHE_SIZE+1) / 2), LINE_CACHE_SIZE);
 
-  // check for overflow (since we use the cap argument in the mix)
+  // check for overflow
   if (memsize < (i64)sizeof(Chan))
     panic("buffer size out of range");
 
@@ -583,7 +599,8 @@ Chan* nullable ChanOpen(Mem mem, u32 cap) {
 
   c->memptr = ptr;
   c->mem = mem;
-  c->qcap = cap;
+  c->elemsize = elemsize;
+  c->qcap = bufcap;
   chan_lock_init(&c->lock);
 
   // make sure that the thread setting up the channel gets a low thread_id
@@ -636,10 +653,10 @@ void ChanFree(Chan* c) {
 
 
 u32  ChanCap(const Chan* c) { return c->qcap; }
-bool ChanSend(Chan* c, Msg msg)                      { return chan_send(c, msg, NULL); }
-bool ChanTrySend(Chan* c, bool* closed, Msg msg)     { return chan_send(c, msg, closed); }
-bool ChanRecv(Chan* c, Msg* result)                  { return chan_recv(c, result, NULL); }
-bool ChanTryRecv(Chan* c, bool* closed, Msg* result) { return chan_recv(c, result, closed); }
+bool ChanSend(Chan* c, void* elemptr)                  { return chan_send(c, elemptr, NULL); }
+bool ChanRecv(Chan* c, void* elemptr)                  { return chan_recv(c, elemptr, NULL); }
+bool ChanTrySend(Chan* c, bool* closed, void* elemptr) { return chan_send(c, elemptr, closed); }
+bool ChanTryRecv(Chan* c, bool* closed, void* elemptr) { return chan_recv(c, elemptr, closed); }
 
 
 ASSUME_NONNULL_END
