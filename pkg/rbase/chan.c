@@ -193,7 +193,7 @@ typedef struct Chan {
   // These fields are frequently accessed and stored to.
   // There's a perf opportunity here with a different, more cache efficient layout.
   atomic_u32  qlen;   // number of messages currently queued in buf
-  atomic_u32  closed; // 1 when closed
+  atomic_bool closed; // one way switch (once it becomes true, never becomes false again)
   CHAN_LOCK_T lock;   // guards the Chan struct
 
   // sendq is accessed on every call to chan_recv and only in some cases by chan_send,
@@ -284,8 +284,8 @@ static Thr* chan_park(Chan* c, WaitQ* wq, Msg* msgptr) {
 }
 
 
-inline static bool chan_isfull(Chan* c) {
-  // c.dataqsiz is immutable (never written after the channel is created)
+inline static bool chan_full(Chan* c) {
+  // c.qcap is immutable (never written after the channel is created)
   // so it is safe to read at any time during channel operation.
   if (c->qcap == 0)
     return AtomicLoad(&c->recvq.first) == NULL;
@@ -307,7 +307,6 @@ static bool chan_send_direct(Chan* c, Msg msg, Thr* recvt) {
   dlog_send("direct send of msg %zu to [%zu] (msgptr %p)", (size_t)msg, recvt->id, msgptr);
   *msgptr = msg; // store to address provided with chan_recv call
   AtomicStore(&recvt->msgptr, NULL);
-  //atomic_thread_fence(memory_order_seq_cst);
 
   chan_unlock(&c->lock);
   thr_signal(recvt); // wake up chan_recv caller
@@ -320,7 +319,23 @@ inline static bool chan_send(Chan* c, Msg msg, bool* nullable closed) {
   dlog_send("msg %zu", (size_t)msg);
 
   // fast path for non-blocking send on full channel
-  if (!block && AtomicLoad(&c->closed) == 0 && chan_isfull(c))
+  //
+  // From Go's chan implementation from which this logic is borrowed:
+  // After observing that the channel is not closed, we observe that the channel is
+  // not ready for sending. Each of these observations is a single word-sized read
+  // (first c.closed and second chan_full()).
+  // Because a closed channel cannot transition from 'ready for sending' to
+  // 'not ready for sending', even if the channel is closed between the two observations,
+  // they imply a moment between the two when the channel was both not yet closed
+  // and not ready for sending. We behave as if we observed the channel at that moment,
+  // and report that the send cannot proceed.
+  //
+  // It is okay if the reads are reordered here: if we observe that the channel is not
+  // ready for sending and then observe that it is not closed, that implies that the
+  // channel wasn't closed during the first observation. However, nothing here
+  // guarantees forward progress. We rely on the side effects of lock release in
+  // chan_recv() and ChanClose() to update this thread's view of c.closed and chan_full().
+  if (!block && !c->closed && chan_full(c))
     return false;
 
   chan_lock(&c->lock);
@@ -354,22 +369,69 @@ inline static bool chan_send(Chan* c, Msg msg, bool* nullable closed) {
       AtomicStore(&c->sendx, 0);
     AtomicAdd(&c->qlen, 1);
     chan_unlock(&c->lock);
-  } else {
-    // park the calling thread. Some recv caller will wake us up.
-    // Note that chan_park calls chan_unlock(&c->lock)
-    dlog_send("wait... (msgptr %p)", &msg);
-    chan_park(c, &c->sendq, &msg);
-    dlog_send("woke up -- sent message %zu", (size_t)msg);
+    return true;
   }
+
+  // buffer is full and there is no waiting receiver
+  if (!block) {
+    chan_unlock(&c->lock);
+    return false;
+  }
+
+  // park the calling thread. Some recv caller will wake us up.
+  // Note that chan_park calls chan_unlock(&c->lock)
+  dlog_send("wait... (msgptr %p)", &msg);
+  chan_park(c, &c->sendq, &msg);
+  dlog_send("woke up -- sent message %zu", (size_t)msg);
   return true;
+}
+
+
+// chan_empty reports whether a read from c would block (that is, the channel is empty).
+// It uses a single atomic read of mutable state.
+inline static bool chan_empty(Chan* c) {
+  // Note: qcap is immutable
+  if (c->qcap == 0)
+    return AtomicLoad(&c->sendq.first) == NULL;
+  return AtomicLoad(&c->qlen) == 0;
 }
 
 
 static bool chan_recv_direct(Chan* c, Msg* dstmsgptr, Thr* st);
 
+
 inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
   bool block = closed == NULL; // TODO: non-blocking path
   dlog_recv("msgptr %p", msgptr);
+
+  // Fast path: check for failed non-blocking operation without acquiring the lock.
+  if (!block && chan_empty(c)) {
+    // After observing that the channel is not ready for receiving, we observe whether the
+    // channel is closed.
+    //
+    // Reordering of these checks could lead to incorrect behavior when racing with a close.
+    // For example, if the channel was open and not empty, was closed, and then drained,
+    // reordered reads could incorrectly indicate "open and empty". To prevent reordering,
+    // we use atomic loads for both checks, and rely on emptying and closing to happen in
+    // separate critical sections under the same lock.  This assumption fails when closing
+    // an unbuffered channel with a blocked send, but that is an error condition anyway.
+    if (AtomicLoad(&c->closed) == false) {
+      // Because a channel cannot be reopened, the later observation of the channel
+      // being not closed implies that it was also not closed at the moment of the
+      // first observation. We behave as if we observed the channel at that moment
+      // and report that the receive cannot proceed.
+      return false;
+    }
+    // The channel is irreversibly closed. Re-check whether the channel has any pending data
+    // to receive, which could have arrived between the empty and closed checks above.
+    // Sequential consistency is also required here, when racing with such a send.
+    if (chan_empty(c)) {
+      // The channel is irreversibly closed and empty
+      *msgptr = 0;
+      *closed = true;
+      return false;
+    }
+  }
 
   chan_lock(&c->lock);
 
@@ -413,7 +475,11 @@ inline static bool chan_recv(Chan* c, Msg* msgptr, bool* nullable closed) {
     return true;
   }
 
-  // No message available -- empty queue and no waiting senders
+  // No message available -- nothing queued and no waiting senders
+  if (!block) {
+    chan_unlock(&c->lock);
+    return false;
+  }
 
   // Check if the channel is closed.
   if (AtomicLoad(&c->closed)) {
