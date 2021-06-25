@@ -191,7 +191,7 @@ typedef struct Chan {
   u32         qcap;   // size of the circular queue buf (immutable)
 
   // These fields are frequently accessed and stored to.
-  // There's a perf opportunity here with a different, more cache efficient layout.
+  // There's a perf opportunity here with a different more cache-efficient layout.
   atomic_u32  qlen;   // number of messages currently queued in buf
   atomic_bool closed; // one way switch (once it becomes true, never becomes false again)
   CHAN_LOCK_T lock;   // guards the Chan struct

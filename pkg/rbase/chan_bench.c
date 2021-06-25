@@ -1,3 +1,7 @@
+//
+// Run these benchmarks with:
+//   ckit watch -fast -r chan_bench
+//
 #include "rbase.h"
 #include "chan.h"
 #include "bench_impl.h"
@@ -88,23 +92,46 @@ R_BENCHMARK(st1, st1_onbegin)(Benchmark* b) {
 // ————————————————————————————————————————————————————————————————————————————————————————————
 // threads
 
+
 typedef struct TestThread {
   thrd_t t;
   u32    id;
   Chan*  ch;
-  u32    recv_msgc; // number of messages received
-  u64    recv_sum;  // sum of messages received
   Timer  timer;
+
+  // messages to be sent (fields used by send_thread)
+  u32        send_msglen; // messages in msgv
+  uintptr_t* send_msgv;   // messages
+
+  // received messages (fields used by recv_thread)
+  u32 recv_msgc; // number of messages received
+  u64 recv_sum;  // sum of messages received
 } TestThread;
+
+
+static int send_thread(void* tptr) {
+  auto t = (TestThread*)tptr;
+  auto msgv = t->send_msgv;
+  t->timer = TimerStart();
+  for (u32 i = 0; i < t->send_msglen; i++) {
+    TimerCycleSampleStart(&t->timer);
+    UNUSED bool ok = ChanSend(t->ch, msgv[i]);
+    TimerCycleSampleStop(&t->timer);
+    assert(ok);
+  }
+  TimerStop(&t->timer);
+  //dlog("[send_thread#%u] exit", t->id);
+  return 0;
+}
 
 
 static int recv_thread(void* tptr) {
   auto t = (TestThread*)tptr;
   //fprintf(stderr, "thread %u start\n", t->id);
-  t->timer = TimerStart();
   Chan* ch = t->ch;
   u32 recv_msgc = 0;
   Msg recv_sum = 0;
+  t->timer = TimerStart();
   while (1) {
     // receive a message
     Msg msg;
@@ -122,96 +149,172 @@ static int recv_thread(void* tptr) {
 }
 
 
-static u32 mt1_bufsize = 1;
+struct {
+  u32 bufsize;
+  u32 n_send_threads;
+  u32 n_recv_threads;
+} mt1_conf = {0};
 
-
-static void mt1_onbegin(Benchmark* b) {
-  // u32 thread_count = os_ncpu();
-  u32 thread_count = 8;
-  mt1_bufsize = thread_count / 2;
-  b->userdata = (uintptr_t)thread_count;
-  fprintf(stderr, "using 1 sender thread, %u receiver threads. Buffer size: %u\n",
-    thread_count, mt1_bufsize);
+static void onbegin(Benchmark* b) {
+  fprintf(stderr, "using %u sender threads, %u receiver threads (bufsize %u)\n",
+    mt1_conf.n_send_threads, mt1_conf.n_recv_threads, mt1_conf.bufsize);
 }
 
+static Timer mt1_sampler(Benchmark* b);
 
-R_BENCHMARK(mt1, mt1_onbegin)(Benchmark* b) {
+#define DEF_MT1_BENCHMARK(name, init) \
+  static void name##_onbegin(Benchmark* b) { \
+    UNUSED auto ncpu = os_ncpu();                   \
+    init                                     \
+    onbegin(b);                              \
+  }                                          \
+  R_BENCHMARK(name, name##_onbegin)(Benchmark* b) { return mt1_sampler(b); }
+
+
+DEF_MT1_BENCHMARK(mt1_1_1_buffered, {
+  mt1_conf.bufsize = 4;
+  mt1_conf.n_send_threads = 1;
+  mt1_conf.n_recv_threads = 1;
+})
+
+DEF_MT1_BENCHMARK(mt1_1_N_buffered, {
+  mt1_conf.bufsize = MAX(1, ncpu / 2);
+  mt1_conf.n_send_threads = 1;
+  mt1_conf.n_recv_threads = ncpu;
+})
+
+DEF_MT1_BENCHMARK(mt1_N_N_buffered, {
+  mt1_conf.bufsize = MAX(1, ncpu / 2);
+  mt1_conf.n_send_threads = ncpu;
+  mt1_conf.n_recv_threads = ncpu;
+})
+
+DEF_MT1_BENCHMARK(mt1_N_N_unbuffered, {
+  mt1_conf.bufsize = 0;
+  mt1_conf.n_send_threads = ncpu;
+  mt1_conf.n_recv_threads = ncpu;
+})
+
+DEF_MT1_BENCHMARK(mt1_N2_N2_buffered, {
+  mt1_conf.bufsize = MAX(1, ncpu / 4);
+  mt1_conf.n_send_threads = MAX(1, ncpu / 2);
+  mt1_conf.n_recv_threads = MAX(1, ncpu / 2);
+})
+
+
+static Timer mt1_sampler(Benchmark* b) {
   u32 messages_count = b->N;
-  u32 thread_count = (u32)b->userdata;
+  auto conf = mt1_conf;
 
   Mem mem = MemLibC();
 
-  TestThread* threads = memalloc(mem, thread_count * sizeof(TestThread));
+  TestThread* send_threads = memalloc(mem, conf.n_send_threads * sizeof(TestThread));
+  TestThread* recv_threads = memalloc(mem, conf.n_recv_threads * sizeof(TestThread));
   Msg* messages = memalloc(mem, messages_count * sizeof(Msg));
 
-  Chan* ch = ChanOpen(mem, /*bufsize*/mt1_bufsize);
+  Chan* ch = ChanOpen(mem, /*bufsize*/conf.bufsize);
 
   // init messages (1 2 3 ...)
-  u64 send_message_sum = 0; // sum of all messages
+  u64 send_sum = 0; // sum of all messages
   for (u32 i = 0; i < messages_count; i++) {
     Msg msg = (Msg)i + 1; // make it 1-based for simplicity
     messages[i] = msg;
-    send_message_sum += (u64)msg;
+    send_sum += (u64)msg;
   }
 
-  // init & spawn threads
-  dlog("spawning %u receiver threads", thread_count);
-  for (u32 i = 0; i < thread_count; i++) {
-    TestThread* t = &threads[i];
+  // init & spawn sender threads
+  u32 send_messages_i = 0;
+  const u32 send_messages_n = messages_count / conf.n_send_threads;
+  for (u32 i = 0; i < conf.n_send_threads; i++) {
+    TestThread* t = &send_threads[i];
+    t->id = i + 1;
+    t->ch = ch;
+
+    assert(send_messages_i < messages_count);
+    t->send_msgv = &messages[send_messages_i];
+
+    u32 end_i = (
+      i < conf.n_send_threads-1 ? MIN(send_messages_i + send_messages_n, messages_count) :
+      messages_count // last chunk
+    );
+    // dlog("send_thread %u sends messages [%02u-%02u)", t->id, send_messages_i, end_i);
+    t->send_msglen = end_i - send_messages_i;
+    send_messages_i = end_i;
+
+    UNUSED auto status = thrd_create(&t->t, send_thread, t);
+    asserteq(status, thrd_success);
+  }
+
+  // init & spawn receiver threads
+  for (u32 i = 0; i < conf.n_recv_threads; i++) {
+    TestThread* t = &recv_threads[i];
     t->id = i + 1;
     t->ch = ch;
     UNUSED auto status = thrd_create(&t->t, recv_thread, t);
     asserteq(status, thrd_success);
   }
 
-  // send messages
-  dlog("sending %u messages (values 1 2 3 ...)", messages_count);
-  auto timer = TimerStart();
-  for (u32 i = 0; i < messages_count; i++) {
-    Msg msg = messages[i];
-    ChanSend(ch, msg);
+  // wait for all messages to be sent
+  //dlog("waiting for %u messages to be sent by %u threads...",
+  //  messages_count, conf.n_send_threads);
+  for (u32 i = 0; i < conf.n_send_threads; i++) {
+    int retval;
+    thrd_join(send_threads[i].t, &retval);
   }
-  TimerStop(&timer);
+  //dlog("done sending %u messages", messages_count);
+  //msleep(100);
 
-  //msleep(100); // XXX FIXME
-
-  // close the channel and wait for threads to exit
+  // close the channel and wait for recv_threads to exit
   ChanClose(ch);
-  for (u32 i = 0; i < thread_count; i++) {
-    auto t = &threads[i];
+  for (u32 i = 0; i < conf.n_recv_threads; i++) {
+    auto t = &recv_threads[i];
     int retval;
     thrd_join(t->t, &retval);
   }
   ChanFree(ch);
 
+  // check results and sum time
   atomic_thread_fence(memory_order_seq_cst);
 
-  // check results
-  u32 recv_message_count = 0; // tally of total number of messages all threads received
-  u64 recv_message_sum = 0;   // sum of all messages received by all threads
-  u64 recv_time_sum = 0;      // total time taken by all threads
-  for (u32 i = 0; i < thread_count; i++) {
-    auto t = &threads[i];
+  u64 send_time_sum = 0; // total time taken by all send_threads
+  u64 send_utime_sum = 0;
+  for (u32 i = 0; i < conf.n_send_threads; i++) {
+    auto t = &send_threads[i];
+    send_time_sum  += t->timer.time;
+    send_utime_sum += t->timer.utime;
+  }
+
+  u32 recv_count = 0;    // tally of total number of messages all recv_threads received
+  u64 recv_sum = 0;      // sum of all messages received by all recv_threads
+  u64 recv_time_sum = 0; // total time taken by all recv_threads
+  u64 recv_utime_sum = 0;
+  for (u32 i = 0; i < conf.n_recv_threads; i++) {
+    auto t = &recv_threads[i];
     recv_time_sum += t->timer.time;
-    recv_message_sum += t->recv_sum;
-    recv_message_count += t->recv_msgc;
+    recv_utime_sum += t->timer.utime;
+    recv_sum += t->recv_sum;
+    recv_count += t->recv_msgc;
   }
 
-  if (recv_message_sum != send_message_sum) {
-    panic("recv_message_sum != send_message_sum (" FMT_U64 " != " FMT_U64 ")",
-      recv_message_sum, send_message_sum);
-  }
+  // light correctness checks (chan_test does more comprehensive testing)
+  if (recv_sum != send_sum)
+    panic("recv_sum != send_sum (" FMT_U64 " != " FMT_U64 ")", recv_sum, send_sum);
+  if (recv_count != messages_count)
+    panic("recv_count != messages_count (%u != %u)", recv_count, messages_count);
 
-  if (recv_message_count != messages_count) {
-    panic("recv_message_count != messages_count (%u != %u)",
-      recv_message_count, messages_count);
-  }
-
-  // add the average of time used by threads to receive messages
-  timer.time += recv_time_sum / thread_count;
+  // add the average of time used by threads
+  Timer timer = {
+    .time = ((send_time_sum / conf.n_send_threads)
+          + (recv_time_sum / conf.n_recv_threads))
+          / 2,
+    .utime = ((send_utime_sum / conf.n_send_threads)
+          + (recv_utime_sum / conf.n_recv_threads))
+          / 2,
+  };
 
   memfree(mem, messages);
-  memfree(mem, threads);
+  memfree(mem, send_threads);
+  memfree(mem, recv_threads);
   return timer;
 }
 
