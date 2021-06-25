@@ -93,7 +93,7 @@ ASSUME_NONNULL_BEGIN
 
     if (buflen > 0) {
       buflen += (ssize_t)snprintf(&buf[buflen], bufcap - buflen, "\x1b[0m (%s)\n", fname);
-      if (buflen < 0) {
+      if (buflen >= bufcap) {
         // truncated; make sure to end the line
         buf[buflen - 1] = '\n';
       }
