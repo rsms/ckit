@@ -4,6 +4,13 @@
 ASSUME_NONNULL_BEGIN
 #if R_TESTING_ENABLED
 
+// DEBUG_LOG: define to enable dlog calls in tests
+//#define DEBUG_LOG
+#if !defined(DEBUG_LOG)
+  #undef dlog
+  #define dlog(...) ((void)0)
+#endif
+
 
 static u64 init_test_messages(uintptr_t* messages, u32 nmessages) {
   // init messages (1 2 3 ...)
@@ -45,9 +52,7 @@ R_TEST(chan_st) {
 }
 
 
-// #define TEST_THREAD_COUNT  8
-// #define TEST_MESSAGE_COUNT 2 // per thread
-// #define TEST_TOTAL_MESSAGE_COUNT (TEST_MESSAGE_COUNT * TEST_THREAD_COUNT)
+// TODO: test non-blocking ChanTrySend and ChanTryRecv
 
 
 typedef struct TestThread {
@@ -78,22 +83,18 @@ static int send_thread(void* tptr) {
 static int recv_thread(void* tptr) {
   auto t = (TestThread*)tptr;
   t->msglen = 0;
-  //msleep(10); // provokes case where chan_send is called before any chan_recv
   while (1) {
     // receive a message
     uintptr_t msg;
     if (!ChanRecv(t->ch, &msg)) {
-      //dlog("[recv_thread#%u] channel closed", t->id);
-      break; // end thread when channel closed
+      break; // channel closed
     }
 
     // save received message for later inspection by test
-    //dlog("T %u got %u", t->id, (u32)msg);
     assertf(t->msglen < t->msgcap,
       "[recv_thread#%u] received an excessive number of messages (>%u)",
       t->id, t->msgcap);
     t->msgv[t->msglen++] = msg;
-    //dlog(">> %zu (recv_thread#%u)", (size_t)msg, t->id);
 
     // add some thread scheduling jitter
     // usleep(rand() % 10);
@@ -104,37 +105,41 @@ static int recv_thread(void* tptr) {
 }
 
 
-static void chan_1send_Nrecv(u32 bufcap, u32 nthreads, u32 nmessages);
-// R_TEST(chan_1send_Nrecv_buffered1) { chan_1send_Nrecv(1, 2, 4); }
-R_TEST(chan_1send_Nrecv_buffered1) { chan_1send_Nrecv(2, os_ncpu() + 1, 8); }
-// R_TEST(chan_1send_Nrecv_buffered1) { chan_1send_Nrecv(1, 2, 4); }
-// R_TEST(chan_1send_Nrecv_unbuffered) { chan_1send_Nrecv(0, 2, 4); }
+static void chan_1send_Nrecv(u32 bufcap, u32 n_send_threads, u32 n_recv_threads, u32 nmessages);
+
+R_TEST(chan_1send_1recv_buffered)   { chan_1send_Nrecv(2,             1,             1, 80); }
+R_TEST(chan_1send_Nrecv_buffered)   { chan_1send_Nrecv(2,             1, os_ncpu() + 1, 80); }
+R_TEST(chan_Nsend_1recv_buffered)   { chan_1send_Nrecv(2, os_ncpu() + 1,             1, 80); }
+R_TEST(chan_Nsend_Nrecv_buffered)   { chan_1send_Nrecv(2, os_ncpu() + 1, os_ncpu() + 1, 80); }
+R_TEST(chan_1send_1recv_unbuffered) { chan_1send_Nrecv(0,             1,             1, 80); }
+R_TEST(chan_1send_Nrecv_unbuffered) { chan_1send_Nrecv(0,             1, os_ncpu() + 1, 80); }
+R_TEST(chan_Nsend_1recv_unbuffered) { chan_1send_Nrecv(0, os_ncpu() + 1,             1, 80); }
+R_TEST(chan_Nsend_Nrecv_unbuffered) { chan_1send_Nrecv(0, os_ncpu() + 1, os_ncpu() + 1, 80); }
+
+// R_TEST(chan_1send_Nrecv_buffered1) { chan_1send_Nrecv(1, 2, 2, 8); }
 
 
-static void chan_1send_Nrecv(u32 bufcap, u32 nthreads, u32 nmessages) {
+static void chan_1send_Nrecv(u32 bufcap, u32 n_send_threads, u32 n_recv_threads, u32 nmessages) {
   // serial sender, multiple receivers
   Mem mem = MemLibC();
 
-  u32 send_message_count = nthreads * nmessages;
-  TestThread* threads = memalloc(mem, sizeof(TestThread) * nthreads);
+  u32 send_message_count = MAX(n_recv_threads, n_send_threads) * nmessages;
+  TestThread* recv_threads = memalloc(mem, sizeof(TestThread) * n_recv_threads);
+  TestThread* send_threads = memalloc(mem, sizeof(TestThread) * n_send_threads);
 
   // allocate storage for messages
   // the calling "sender" thread uses send_message_count messages while each
   // receiver thread is given send_message_count message slots for reception
   // as in theory one thread may receive all messages.
-  size_t message_storage_count = send_message_count * (nthreads + 1);
+  size_t message_storage_count = send_message_count * (n_recv_threads + 1);
   uintptr_t* message_storage = memalloc(mem, message_storage_count * sizeof(uintptr_t));
   uintptr_t* send_messages = &message_storage[0];
-
-  // TODO: with buffered channels we need to sync recv threads with the sender
-  // or else the sender may outrace the receiver to close and leave some messages
-  // unreceived in the queue buffer.
 
   LSema sema;
   LSemaInit(&sema, 0);
 
   Chan* ch = ChanOpen(mem, /*cap*/bufcap);
-  dlog("channel capacity: %u", ChanCap(ch));
+  dlog("channel capacity: %u, send_message_count: %zu", ChanCap(ch), send_message_count);
 
   // init messages (1 2 3 ...)
   u64 send_message_sum = 0; // sum of all messages
@@ -144,10 +149,34 @@ static void chan_1send_Nrecv(u32 bufcap, u32 nthreads, u32 nmessages) {
     send_message_sum += (u64)msg;
   }
 
-  // init & spawn threads
-  dlog("spawning %u threads", nthreads);
-  for (u32 i = 0; i < nthreads; i++) {
-    TestThread* t = &threads[i];
+  dlog("spawning %u sender threads", n_send_threads);
+  u32 send_messages_i = 0;
+  const u32 send_messages_n = send_message_count / n_send_threads;
+  for (u32 i = 0; i < n_send_threads; i++) {
+    TestThread* t = &send_threads[i];
+    t->id = i + 1;
+    t->ch = ch;
+    t->sema = &sema;
+    t->msgcap = send_message_count;
+
+    assert(send_messages_i < send_message_count);
+    t->msgv = &send_messages[send_messages_i];
+
+    u32 end_i = (
+      i < n_send_threads-1 ? MIN(send_messages_i + send_messages_n, send_message_count) :
+      send_message_count // last chunk
+    );
+    // dlog("send_thread %u sends messages [%02u-%02u)", t->id, send_messages_i, end_i);
+    t->msglen = end_i - send_messages_i;
+    send_messages_i = end_i;
+
+    auto status = thrd_create(&t->t, send_thread, t);
+    asserteq(status, thrd_success);
+  }
+
+  dlog("spawning %u receiver threads", n_recv_threads);
+  for (u32 i = 0; i < n_recv_threads; i++) {
+    TestThread* t = &recv_threads[i];
     t->id = i + 1;
     t->ch = ch;
     t->msgcap = send_message_count;
@@ -157,30 +186,29 @@ static void chan_1send_Nrecv(u32 bufcap, u32 nthreads, u32 nmessages) {
     asserteq(status, thrd_success);
   }
 
-  // send messages
-  dlog("sending %u messages (values 1 2 3 ...)", send_message_count);
-  for (u32 i = 0; i < send_message_count; i++) {
-    uintptr_t msg = send_messages[i];
-    ChanSend(ch, msg);
+  // wait for all messages to be sent
+  dlog("waiting for %u messages to be sent by %u threads...", send_message_count, n_send_threads);
+  for (u32 i = 0; i < n_send_threads; i++) {
+    int retval;
+    thrd_join(send_threads[i].t, &retval);
   }
   dlog("done sending %u messages", send_message_count);
+  //msleep(100);
 
-  // msleep(100);
-
-  // close the channel and wait for threads to exit
+  // close the channel and wait for receiver threads to exit
   ChanClose(ch);
-  for (u32 i = 0; i < nthreads; i++) {
-    auto t = &threads[i];
+  dlog("waiting for %u receiver threads to finish...", n_recv_threads);
+  for (u32 i = 0; i < n_recv_threads; i++) {
     int retval;
-    thrd_join(t->t, &retval);
+    thrd_join(recv_threads[i].t, &retval);
   }
   ChanFree(ch);
 
   // check results
   u32 recv_message_count = 0; // tally of total number of messages all threads received
   u64 recv_message_sum   = 0; // sum of all messages received
-  for (u32 i = 0; i < nthreads; i++) {
-    auto t = &threads[i];
+  for (u32 i = 0; i < n_recv_threads; i++) {
+    auto t = &recv_threads[i];
     recv_message_count += t->msglen;
     for (u32 y = 0; y < t->msglen; y++) {
       recv_message_sum += (u64)t->msgv[y];
@@ -189,7 +217,8 @@ static void chan_1send_Nrecv(u32 bufcap, u32 nthreads, u32 nmessages) {
   asserteq(recv_message_count, send_message_count);
   asserteq(recv_message_sum, send_message_sum);
 
-  memfree(mem, threads);
+  memfree(mem, recv_threads);
+  memfree(mem, send_threads);
   memfree(mem, send_messages);
 }
 
