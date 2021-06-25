@@ -61,7 +61,8 @@ endfunction()
 # ckit_gen_sources_list(target) writes a file with all sources needed for a target to
 # ${CMAKE_CURRENT_BINARY_DIR}/${filename_prefix}.ckit-sources.txt
 function(ckit_gen_sources_list target filename_prefix)
-  message(VERBOSE "ckit_gen_sources_list ${target}")
+  set(_output_file ${CMAKE_CURRENT_BINARY_DIR}/${filename_prefix}.ckit-sources.txt)
+  message(VERBOSE "ckit_gen_sources_list ${target} -> ${_output_file}")
   ckit_get_link_dependencies(${target} _deps)
   set(_dep_sources_list "")
   foreach(_dep IN LISTS _deps)
@@ -79,7 +80,7 @@ function(ckit_gen_sources_list target filename_prefix)
       endforeach()
     endif()
   endforeach()
-  file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/${filename_prefix}.ckit-sources.txt" ${_dep_sources_list})
+  file(WRITE "${_output_file}" ${_dep_sources_list})
 endfunction()
 
 
@@ -132,6 +133,61 @@ macro(ckit_require_package pkg)
 endmacro()
 
 
+# _ckit_define_project_test()
+# defines project-wide "test" target if needed
+macro(_ckit_define_project_test)
+  if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND (NOT TARGET test))
+    add_custom_target(test)
+  endif()
+endmacro()
+
+
+# ckit_add_test_dependencies(target...)
+macro(ckit_add_test_dependencies)
+  _ckit_define_project_test()
+  add_dependencies(test ${ARGN})
+endmacro()
+
+
+# ckit_add_test(TEST_TARGET EXE_TARGET CMDARGS...)
+# Adds a command target TEST_TARGET to run the executable EXE_TARGET.
+# TEST_TARGET is added as a dependency to the project-wide "test" target.
+macro(ckit_add_test TEST_TARGET EXE_TARGET)
+  target_compile_definitions(${EXE_TARGET} PRIVATE R_TESTING_ENABLED=1)
+  add_custom_target(${TEST_TARGET}
+    DEPENDS ${EXE_TARGET}
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${EXE_TARGET} ${ARGN}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    USES_TERMINAL)
+  ckit_gen_sources_list(${EXE_TARGET} test-${TEST_TARGET})
+  ckit_add_test_dependencies(test ${TEST_TARGET})
+endmacro()
+
+
+# ckit_force_load_libfile(TARGET LIBFILENAME)
+# Make sure that all symbols of static library file LIBFILENAME are loaded into TARGET
+macro(ckit_force_load_libfile TARGET LIBFILENAME)
+  if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+    target_link_options(${TARGET} PRIVATE
+      -Wl,-force_load,${LIBFILENAME}
+    )
+  elseif (CMAKE_C_COMPILER_ID MATCHES "GNU")
+    target_link_options(${TARGET} PRIVATE
+      -Wl,--whole-archive ${LIBFILENAME} -Wl,--no-whole-archive
+    )
+  else()
+    message(WARNING "ckit_force_load_libfile: unsupported compiler ${CMAKE_C_COMPILER_ID}")
+  endif()
+endmacro()
+
+
+# ckit_force_load_lib(TARGET LIBNAME)
+# Make sure that all symbols of static library LIBNAME are loaded into TARGET
+macro(ckit_force_load_lib TARGET LIBNAME)
+  ckit_force_load_libfile(${TARGET} ${CMAKE_CURRENT_BINARY_DIR}/lib${LIBNAME}.a)
+endmacro()
+
+
 # ckit_define_test(target [main_source_file])
 macro(ckit_define_test target)
   set(extra_macro_args ${ARGN})
@@ -140,6 +196,7 @@ macro(ckit_define_test target)
   if (${num_extra_args} GREATER 0)
     list(GET extra_macro_args 0 _main_source_file)
   endif()
+
   if(R_BUILD_TESTING_THIS_PROJECT AND TEST_ENABLED)
     get_target_property(_sources ${target} SOURCES)
 
@@ -150,37 +207,40 @@ macro(ckit_define_test target)
       list(REMOVE_ITEM _sources ${_main_source_file})
     endif()
 
-    add_executable(${target}-test ${CKIT_RBASE_DIR}/testing.c ${_sources})
-    target_compile_definitions(${target}-test PRIVATE R_TESTING_ENABLED=1 R_TESTING_MAIN_IMPL=1)
+    set(_test_exe_target ${target}-test-exe)
+    set(_test_run_target ${target}-test)
+
+    add_executable(${_test_exe_target} ${CKIT_RBASE_DIR}/testing.c ${_sources})
+    target_compile_definitions(${_test_exe_target} PRIVATE R_TESTING_ENABLED=1 R_TESTING_MAIN_IMPL=1)
 
     get_target_property(_include_directories ${target} INCLUDE_DIRECTORIES)
     if (NOT (_include_directories STREQUAL "_include_directories-NOTFOUND"))
-      target_include_directories(${target}-test PRIVATE ${_include_directories})
+      target_include_directories(${_test_exe_target} PRIVATE ${_include_directories})
     endif()
 
     get_target_property(_compile_definitions ${target} COMPILE_DEFINITIONS)
     if (NOT (_compile_definitions STREQUAL "_compile_definitions-NOTFOUND"))
-      target_compile_definitions(${target}-test PRIVATE ${_compile_definitions})
+      target_compile_definitions(${_test_exe_target} PRIVATE ${_compile_definitions})
     endif()
 
     get_target_property(_compile_options ${target} COMPILE_OPTIONS)
     if (NOT (_compile_options STREQUAL "_compile_options-NOTFOUND"))
-      target_compile_options(${target}-test PRIVATE ${_compile_options})
+      target_compile_options(${_test_exe_target} PRIVATE ${_compile_options})
     endif()
 
     ckit_get_link_dependencies(${target} _deps)
     foreach(_dep IN LISTS _deps)
       if (NOT (${target} STREQUAL "${_dep}"))
-        target_link_libraries(${target}-test ${_dep})
+        target_link_libraries(${_test_exe_target} ${_dep})
       endif()
     endforeach()
 
-    target_compile_options(${target}-test PRIVATE -gdwarf)
+    target_compile_options(${_test_exe_target} PRIVATE -gdwarf)
 
     # if (_main_source_file)
-    #   target_sources(${target}-test PRIVATE ${_main_source_file})
+    #   target_sources(${_test_exe_target} PRIVATE ${_main_source_file})
     #   # Note: R_TESTING_INIT_IMPL makes rbase/testing.c define an init/constructor function
-    #   target_compile_definitions(${target}-test PRIVATE R_TESTING_INIT_IMPL=1)
+    #   target_compile_definitions(${_test_exe_target} PRIVATE R_TESTING_INIT_IMPL=1)
     # else()
     #   # Note: R_TESTING_MAIN_IMPL makes rbase/testing.c define a main function
     #   # set_source_files_properties(${CKIT_RBASE_DIR}/testing.c PROPERTIES COMPILE_FLAGS
@@ -188,13 +248,30 @@ macro(ckit_define_test target)
     # endif()
 
     if (NOT (target STREQUAL "rbase"))
-      target_link_libraries(${target}-test rbase)
+      target_link_libraries(${_test_exe_target} rbase)
     endif()
-    if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-      ckit_set_test(${target}-test)
-    endif()
+
+    # define project-wide "test" target if needed
+    # if (CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    #   add_custom_target(test COMMAND touch ${CMAKE_CURRENT_BINARY_DIR}/test.txt)
+    #   ckit_gen_sources_list(${target}-test test) # FIXME
+    #   #ckit_set_test(${target}-test)
+    # endif()
+
+    # define ${target}-test which builds and runs the test
+    add_custom_target(${_test_run_target}
+      DEPENDS ${_test_exe_target}
+      COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${_test_exe_target}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      USES_TERMINAL)
+
+    ckit_gen_sources_list(${_test_exe_target} test-${target})
+
+    # add_dependencies(test ${_test_run_target})
+    ckit_add_test_dependencies(${_test_run_target})
+
   endif()
-endmacro()
+endmacro() # ckit_define_test
 
 
 # ckit_configure_project(lang...) configures the current project to rsms standards.
