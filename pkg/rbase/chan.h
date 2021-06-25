@@ -53,11 +53,11 @@ bool ChanRecv(Chan*, void* elemptr);
 // Unlike ChanSend, this function does not return false to indicate that the channel
 // is closed, but instead it returns false if the message was not sent and sets *closed
 // to false if the reason for the failure was a closed channel.
-bool ChanTrySend(Chan*, bool* closed, void* elemptr);
+bool ChanTrySend(Chan*, void* elemptr, bool* closed);
 
 // ChanTryRecv works like ChanRecv but does not block.
 // Returns true if a message was received.
 // This function does not block/wait.
-bool ChanTryRecv(Chan* ch, bool* closed, void* elemptr);
+bool ChanTryRecv(Chan* ch, void* elemptr, bool* closed);
 
 ASSUME_NONNULL_END

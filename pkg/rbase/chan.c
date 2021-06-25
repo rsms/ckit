@@ -553,7 +553,7 @@ static bool chan_recv_direct(Chan* c, void* dstelemptr, Thr* sendert) {
     dlog_recv("direct recv from [%zu] (dstelemptr %p, buffer full)", sendert->id, dstelemptr);
     //assert_debug(AtomicLoad(&c->qlen) == c->qcap); // queue is full
 
-    // copy msg from queue to receiver
+    // copy element from queue to receiver
     u32 i = AtomicAdd(&c->recvx, 1);
     if (i == c->qcap - 1) {
       AtomicStore(&c->recvx, 0);
@@ -655,8 +655,8 @@ void ChanFree(Chan* c) {
 u32  ChanCap(const Chan* c) { return c->qcap; }
 bool ChanSend(Chan* c, void* elemptr)                  { return chan_send(c, elemptr, NULL); }
 bool ChanRecv(Chan* c, void* elemptr)                  { return chan_recv(c, elemptr, NULL); }
-bool ChanTrySend(Chan* c, bool* closed, void* elemptr) { return chan_send(c, elemptr, closed); }
-bool ChanTryRecv(Chan* c, bool* closed, void* elemptr) { return chan_recv(c, elemptr, closed); }
+bool ChanTrySend(Chan* c, void* elemptr, bool* closed) { return chan_send(c, elemptr, closed); }
+bool ChanTryRecv(Chan* c, void* elemptr, bool* closed) { return chan_recv(c, elemptr, closed); }
 
 
 ASSUME_NONNULL_END
