@@ -1,6 +1,12 @@
 //
 // Run these benchmarks with:
+//   ckit build -fast chan_bench && ./out/fast/chan_bench
+//
+// Alternatively with incremental compilation:
 //   ckit watch -fast -r chan_bench
+//
+// Usage: chan_bench [<milliseconds>]
+// <milliseconds>  How long to sample each benchmark. Defaults to 1000.
 //
 #include "rbase.h"
 #include "chan.h"
