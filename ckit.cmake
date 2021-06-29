@@ -145,7 +145,9 @@ endmacro()
 # ckit_add_test_dependencies(target...)
 macro(ckit_add_test_dependencies)
   _ckit_define_project_test()
-  add_dependencies(test ${ARGN})
+  if (TARGET test)
+    add_dependencies(test ${ARGN})
+  endif()
 endmacro()
 
 
