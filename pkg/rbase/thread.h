@@ -236,13 +236,13 @@ inline static void SpinMutexInit(SpinMutex* m) {
 void _spinMutexWait(SpinMutex* m);
 
 inline static void SpinMutexLock(SpinMutex* m) {
-  if (R_LIKELY(!atomic_exchange_explicit(&m->flag, true, memory_order_acquire)))
+  if (R_LIKELY(!atomic_exchange_explicit(&m->flag, true, r_memory_order(acquire))))
     return;
   _spinMutexWait(m);
 }
 
 inline static void SpinMutexUnlock(SpinMutex* m) {
-  atomic_store_explicit(&m->flag, false, memory_order_release);
+  atomic_store_explicit(&m->flag, false, r_memory_order(release));
 }
 
 // -----------------------
@@ -261,7 +261,7 @@ inline static void HybridMutexDispose(HybridMutex* m) {
 void _hybridMutexWait(HybridMutex* m);
 
 inline static void HybridMutexLock(HybridMutex* m) {
-  if (atomic_exchange_explicit(&m->flag, true, memory_order_acquire)) {
+  if (atomic_exchange_explicit(&m->flag, true, r_memory_order(acquire))) {
     // already locked -- slow path
     _hybridMutexWait(m);
   }
