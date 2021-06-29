@@ -32,6 +32,7 @@ extern "C" {
 #include "debug.h"
 #include "mem.h"
 #include "thread.h"
+#include "chan.h"
 #include "hash.h"
 #include "str.h"
 #include "os.h"
