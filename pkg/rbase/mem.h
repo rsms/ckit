@@ -79,8 +79,9 @@ typedef struct MemAllocator {
 // This is a good choice when you need to burn through a lot of temporary allocations
 // and then free them all. memfree is a noop except for the most recent allocation which simply
 // rewindws the allocator.
+// npages_init is the number of memory pages to map (but not commit) up front.
 // This allocator is NOT thread safe. Use MemSyncWrapper if MT access is needed.
-Mem nullable MemLinearAlloc();
+Mem nullable MemLinearAlloc(size_t npages_init);
 
 // MemLinearFree frees all memory allocated in m, including m itself.
 void MemLinearFree(Mem m);
@@ -115,7 +116,7 @@ void MemArenaShimFree(MemArenaShim* a);
 
 // MemPageFlags control the behavior of mem_pagealloc
 typedef enum {
-  MemPageDefault     = 0,
+  MemPageDefault   = 0,
   MemPageGuardHigh = 1 << 0, // mprotect the last page
   MemPageGuardLow  = 1 << 1, // mprotect the first page (e.g. for stack memory)
 } MemPageFlags;

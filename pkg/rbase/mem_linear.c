@@ -39,10 +39,10 @@ typedef struct LinearAllocator {
   size_t          pagesize; // cached value of mem_pagesize()
 } LinearAllocator;
 
-static Block* nullable grow(LinearAllocator* a, size_t size) {
+static Block* nullable mla_grow(LinearAllocator* a, size_t size) {
   // account for the space needed by the block header
   size += sizeof(Block);
-  // allocate an extra page, in anticipation of another allocation request
+  // map an extra page, in anticipation of another allocation request
   size += a->pagesize;
   // round up to nearest page
   size_t rem = size % a->pagesize;
@@ -66,7 +66,7 @@ static void* mla_alloc(Mem m, size_t size) {
   //dlog("mla_alloc: reqsize %zu, allocsize %zu, avail %zu", size, allocsize, avail);
   Block* b = a->b;
   if (R_UNLIKELY(avail < allocsize)) {
-    b = grow(a, allocsize);
+    b = mla_grow(a, allocsize);
     if (b == NULL)
       return NULL;
   }
@@ -170,15 +170,15 @@ static void* mla_realloc(Mem m, void* ptr, size_t newsize) {
   return ptr2;
 }
 
-Mem nullable MemLinearAlloc() {
+Mem nullable MemLinearAlloc(size_t npages_init) {
   // allocate a first page to store the allocator in as well as initial memory
-  const size_t npages = 1;
-  Block* b = (Block*)mem_pagealloc(npages, MemPageDefault);
+  assert(npages_init > 0);
+  Block* b = (Block*)mem_pagealloc(npages_init, MemPageDefault);
   if (!b)
     return NULL;
   size_t pagesize = mem_pagesize();
   b->next = NULL;
-  b->size = (npages * pagesize) - sizeof(Block);
+  b->size = (npages_init * pagesize) - sizeof(Block);
   b->len = sizeof(LinearAllocator);
   // place the allocator in the first block
   LinearAllocator* a = (LinearAllocator*)&b->data[0];
@@ -208,7 +208,7 @@ void MemLinearFree(Mem m) {
 R_TEST(mem_linear) {
 
   { // alloc
-    auto m = MemLinearAlloc();
+    auto m = MemLinearAlloc(1);
     //dlog("m %p", m);
     size_t reqsize = 9;
     void* p1 = memalloc(m, reqsize);
@@ -222,7 +222,7 @@ R_TEST(mem_linear) {
   }
 
   { // requesting a page should push it to grow()
-    auto m = MemLinearAlloc();
+    auto m = MemLinearAlloc(1);
     //dlog("m %p", m);
     void* p1 = memalloc(m, 8);
     void* p2 = memalloc(m, mem_pagesize() * 2);
@@ -235,7 +235,7 @@ R_TEST(mem_linear) {
   }
 
   { // free of most recent allocation
-    auto m = MemLinearAlloc();
+    auto m = MemLinearAlloc(1);
     //dlog("m %p", m);
     void* p1 = memalloc(m, 8);
     assertnotnull(p1);
@@ -247,7 +247,7 @@ R_TEST(mem_linear) {
   }
 
   { // realloc, ideal case: extend existing segment
-    auto m = MemLinearAlloc();
+    auto m = MemLinearAlloc(1);
     //dlog("m %p", m);
     void* p1 = memalloc(m, 9);
     assertnotnull(p1);
@@ -257,7 +257,7 @@ R_TEST(mem_linear) {
   }
 
   { // realloc, common case: move allocation
-    auto m = MemLinearAlloc();
+    auto m = MemLinearAlloc(1);
     char* p1 = (char*)memalloc(m, 9);
     memcpy(p1, "hello", 5);
     assertnotnull(p1);
@@ -269,7 +269,7 @@ R_TEST(mem_linear) {
   }
 
   { // realloc, shrink
-    auto m = MemLinearAlloc();
+    auto m = MemLinearAlloc(1);
     void* p1 = memalloc(m, 9);
     assertnotnull(p1);
     void* p1b = memrealloc(m, p1, 4);
