@@ -6,6 +6,7 @@
 #ifdef __cplusplus
   #include <atomic>
   #define r_memory_order(name) ::std::memory_order::memory_order_##name
+  typedef ::std::atomic<bool>    atomic_bool;
   typedef ::std::atomic<i8>      atomic_i8;
   typedef ::std::atomic<u8>      atomic_u8;
   typedef ::std::atomic<i16>     atomic_i16;
@@ -21,6 +22,7 @@
   typedef ::std::atomic<ssize_t> atomic_ssize;
 #else
   #define r_memory_order(name) memory_order_##name
+  typedef _Atomic(bool)    atomic_bool;
   typedef _Atomic(i8)      atomic_i8;
   typedef _Atomic(u8)      atomic_u8;
   typedef _Atomic(i16)     atomic_i16;
