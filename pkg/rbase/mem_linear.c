@@ -46,9 +46,8 @@ static Block* nullable mla_grow(LinearAllocator* a, size_t size) {
   size += a->pagesize;
   // round up to nearest page
   size_t rem = size % a->pagesize;
-  if (rem != 0) {
+  if (rem != 0)
     size += a->pagesize - rem;
-  }
   Block* b = (Block*)mem_pagealloc(size / a->pagesize, MemPageDefault);
   if (!b)
     return NULL;
@@ -190,15 +189,32 @@ Mem nullable MemLinearAlloc(size_t npages_init) {
   return (Mem)a;
 }
 
+// returns b->next
+static Block* nullable mla_free_block(LinearAllocator* a, Block* b) {
+  Block* next = b->next;
+  if (!mem_pagefree(b, (b->size + sizeof(Block)) / a->pagesize))
+    REPORT_ERROR("mem_pagefree failed (errno %d)", errno);
+  return next;
+}
+
+void MemLinearReset(Mem m) {
+  LinearAllocator* a = (LinearAllocator*)m;
+  // Keep the root block, which houses the LinearAllocator data.
+  // TODO: consider keeping the largest block and if that is different from the root block,
+  // memcpy the LinearAllocator data.
+  Block* b = a->b;
+  while (b->next) {
+    b = mla_free_block(a, b);
+  }
+  a->b = b;
+  b->len = sizeof(LinearAllocator);
+}
+
 void MemLinearFree(Mem m) {
   LinearAllocator* a = (LinearAllocator*)m;
   Block* b = a->b;
   while (b) {
-    Block* bp = b;
-    b = b->next;
-    if (!mem_pagefree(bp, (bp->size + sizeof(Block)) / a->pagesize)) {
-      REPORT_ERROR("mem_pagefree failed (errno %d)", errno);
-    }
+    b = mla_free_block(a, b);
   }
 }
 
@@ -274,6 +290,31 @@ R_TEST(mem_linear) {
     assertnotnull(p1);
     void* p1b = memrealloc(m, p1, 4);
     asserteq(p1, p1b); // should not have moved
+    MemLinearFree(m);
+  }
+
+  { // MemLinearReset
+    auto m = MemLinearAlloc(1);
+    size_t reqsize = 9;
+
+    void* p1a = memalloc(m, reqsize);
+    void* p2a = memalloc(m, reqsize);
+    void* block1_a = ((LinearAllocator*)m)->b;
+    // make sure to cause a new block to be allocated for p3
+    assertnotnull(memalloc(m, mem_pagesize() * 2));
+    assertnotnull(p1a);
+    assertnotnull(p2a);
+
+    MemLinearReset(m);
+
+    void* p1b = memalloc(m, reqsize);
+    void* p2b = memalloc(m, reqsize);
+    void* block1_b = ((LinearAllocator*)m)->b;
+
+    asserteq(p1b, p1a);
+    asserteq(p2b, p2a);
+    asserteq(block1_b, block1_a); // reset should have kept the root block
+
     MemLinearFree(m);
   }
 }

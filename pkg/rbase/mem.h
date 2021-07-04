@@ -83,6 +83,10 @@ typedef struct MemAllocator {
 // This allocator is NOT thread safe. Use MemSyncWrapper if MT access is needed.
 Mem nullable MemLinearAlloc(size_t npages_init);
 
+// MemLinearReset resets m, which must have been created with MemLinearAlloc, as if
+// nothing is allocated. Useful for resuing already-allocated memory.
+void MemLinearReset(Mem m);
+
 // MemLinearFree frees all memory allocated in m, including m itself.
 void MemLinearFree(Mem m);
 
