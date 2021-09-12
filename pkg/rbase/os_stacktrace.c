@@ -63,13 +63,15 @@ static int _bt_full_cb(void* data, uintptr_t pc, const char* file, int line, con
   if (ctx->limit >= 0 && ctx->count > ctx->limit)
     return 0;
   if (ctx->pass == PASS1) {
-    int len = (int)strlen(fun);
-    if (len > ctx->maxFnNameLen)
-      ctx->maxFnNameLen = len;
+    if (fun != NULL) {
+      int len = (int)strlen(fun);
+      if (len > ctx->maxFnNameLen)
+        ctx->maxFnNameLen = len;
+    }
   } else {
-    file = path_cwdrel(file);
+    file = file ? path_cwdrel(file) : NULL;
     FILE* srcfp = NULL;
-    if (ctx->include_source) {
+    if (ctx->include_source && file) {
       if (!(srcfp = fopen(file, "r"))) {
         //dlog("failed to open %s: %s", filename, strerror(errno));
         if (ctx->nsources_printed == 0)
@@ -82,8 +84,8 @@ static int _bt_full_cb(void* data, uintptr_t pc, const char* file, int line, con
       }
     }
     fprintf(ctx->fp, "  %s%-*s%s  %s:%d  %s[pc %p]%s\n",
-      ctx->boldstyle, ctx->maxFnNameLen, fun, ctx->nostyle,
-      file, line,
+      ctx->boldstyle, ctx->maxFnNameLen, fun == NULL ? "?" : fun, ctx->nostyle,
+      file ? file : "?", line,
       ctx->dimstyle, (void*)pc, ctx->nostyle);
     if (srcfp) {
       fwrite_sourceline(ctx, srcfp, line);
