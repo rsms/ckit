@@ -28,6 +28,7 @@ Str        str_appendc(Str s, char c);
 Str        str_appendfmt(Str s, const char* fmt, ...) ATTR_FORMAT(printf, 2, 3);
 Str        str_appendfmtv(Str s, const char* fmt, va_list);
 Str        str_appendfill(Str s, u32 n, char v); // like msmset(str_reserve)
+Str        str_appendu64(Str s, u64 n, u32 base);
 
 // str_appendrepr appends a human-readable representation of data to dst as C-format ASCII
 // string literals, with "special" bytes escaped (e.g. \n, \xFE, etc.)

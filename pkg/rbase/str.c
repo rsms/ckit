@@ -227,6 +227,60 @@ Str str_appendhex(Str s, const u8* data, u32 len) {
 }
 
 
+static int sdsull2str(char *s, unsigned long long v) {
+    char *p, aux;
+    size_t l;
+
+    /* Generate the string representation, this method produces
+     * an reversed string. */
+    p = s;
+    do {
+        *p++ = '0'+(v%10);
+        v /= 10;
+    } while(v);
+
+    /* Compute length and add null term. */
+    l = p-s;
+    *p = '\0';
+
+    /* Reverse the string. */
+    p--;
+    while(s < p) {
+        aux = *s;
+        *s = *p;
+        *p = aux;
+        s++;
+        p--;
+    }
+    return l;
+}
+
+
+Str str_appendu64(Str s, u64 v, u32 base) {
+  char buf[20]; // 18446744073709551615 (0xFFFFFFFFFFFFFFFF)
+  static const char chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  base = MIN(base, 62);
+  char* p = buf;
+  do {
+    *p++ = chars[v % base];
+    v /= base;
+  } while (v);
+
+  u32 len = (u32)(uintptr_t)(p - buf);
+
+  p--;
+
+  char* dst = s + str_len(s);
+  while (buf <= p) {
+    *dst++ = *p--;
+  }
+
+  str_setlen(s, str_len(s) + len);
+
+  return s;
+}
+
+
 const char* str_splitn(StrSlice* st, char delim, const char* s, size_t slen) {
   const char* send = s + slen;
   const char* p;
