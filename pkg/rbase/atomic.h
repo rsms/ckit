@@ -20,6 +20,13 @@
   typedef ::std::atomic<uint>    atomic_uint;
   typedef ::std::atomic<size_t>  atomic_size;
   typedef ::std::atomic<ssize_t> atomic_ssize;
+
+  // ATOMIC_VAR_INIT is defined as "define ATOMIC_VAR_INIT(__v) {__v}" which triggers
+  // -Wbraced-scalar-init for scalars in C++.
+  #ifdef ATOMIC_VAR_INIT
+    #undef ATOMIC_VAR_INIT
+  #endif
+  #define ATOMIC_VAR_INIT(x) x
 #else
   #define r_memory_order(name) memory_order_##name
   typedef _Atomic(bool)    atomic_bool;
