@@ -241,6 +241,7 @@ Str str_appendu64(Str s, u64 v, u32 base) {
 
   p--;
 
+  s = str_makeroom(s, len);
   char* dst = s + str_len(s);
   while (buf <= p) {
     *dst++ = *p--;
