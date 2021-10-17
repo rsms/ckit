@@ -1,5 +1,10 @@
-if(NOT _CKIT_LIB_INCLUDED)
-set(_CKIT_LIB_INCLUDED 1)
+include_guard()
+if(__CKIT__)
+  return()
+endif()
+set(__CKIT__ TRUE)
+set(ENV{CKIT_DIR} ${CMAKE_CURRENT_LIST_DIR})
+message(STATUS "using ckit at ${CMAKE_CURRENT_LIST_DIR}")
 
 cmake_policy(SET CMP0057 NEW) # "IN LIST" operator
 
@@ -382,5 +387,3 @@ function(_ckit_configure_project)
 
 
 endfunction() # _ckit_configure_project
-
-endif() # _CKIT_LIB_INCLUDED
