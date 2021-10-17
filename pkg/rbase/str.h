@@ -34,8 +34,9 @@ Str        str_appendu64(Str s, u64 n, u32 base);
 // string literals, with "special" bytes escaped (e.g. \n, \xFE, etc.)
 Str str_appendrepr(Str s, const char* data, u32 len);
 
-// str_appendhex appends a hexadecimal representation of data to s.
+// str_appendhex appends a hexadecimal representation of data to s, 2 bytes per input byte.
 // e.g. ("hello\n",6) => "68656C6C6F0A"
+// e.g. ("\0",6)      => "00"
 Str str_appendhex(Str s, const u8* data, u32 len);
 
 // str_reserve reserves len bytes:
