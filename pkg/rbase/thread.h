@@ -269,7 +269,7 @@ inline static void HybridMutexLock(HybridMutex* m) {
 
 inline static void HybridMutexUnlock(HybridMutex* m) {
   atomic_exchange(&m->flag, false);
-  if (AtomicLoad(&m->nwait) != 0) {
+  if (atomic_load(&m->nwait) != 0) {
     // at least one thread waiting on a semaphore signal -- wake one thread
     SemaSignal(&m->sema, 1); // TODO: should we check the return value?
   }
