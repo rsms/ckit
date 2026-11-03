@@ -40,6 +40,7 @@ void _hybridMutexWait(HybridMutex* m) {
           SemaWait(&m->sema);
         }
         AtomicSub(&m->nwait, 1);
+        break; // Retry acquisition with a fresh spin budget if another thread acquired the lock.
       } else {
         // avoid starvation on hyper-threaded CPUs
         YIELD_CPU();
