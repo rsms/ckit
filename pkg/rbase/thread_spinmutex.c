@@ -33,9 +33,12 @@ void _hybridMutexWait(HybridMutex* m) {
     size_t n = kYieldProcessorTries;
     while (atomic_load_explicit(&m->flag, memory_order_relaxed)) {
       if (--n == 0) {
-        // Order registration and the flag check with HybridMutexUnlock so
-        // either we see the unlocked flag or the unlocker sees a waiter.
+        // Pair registration and the flag check with HybridMutexUnlock so
+        // either we see its release or the unlocker sees a waiter. The SC fence
+        // also excludes older non-SC flag/count values permitted by C's
+        // mixed-order rules (acquire exchanges and relaxed waiter decrements).
         atomic_fetch_add(&m->nwait, 1);
+        atomic_thread_fence(memory_order_seq_cst);
         while (atomic_load(&m->flag)) {
           SemaWait(&m->sema);
         }
